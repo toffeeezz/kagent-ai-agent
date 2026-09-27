@@ -1,3 +1,5 @@
+import logging
+
 from openai import (
     AsyncOpenAI,
     AsyncStream,
@@ -27,6 +29,8 @@ from modules.server.models import (
     OpenRouterUsage,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Server:
     client: AsyncOpenAI
@@ -35,14 +39,17 @@ class Server:
         self.client = client
 
     async def send_request_embedding(self, payload: EmbeddingPayload):
+        logger.debug(
+            "Embedding request: agent=%s model=%s input_len=%d",
+            payload.agent_name,
+            payload.model,
+            len(payload.input) if isinstance(payload.input, list) else 1,
+        )
 
         results = await self._request_embedding(
             self.client,
             agent_name=payload.agent_name,
-            params={
-                "model": payload.model,
-                "input": payload.input,
-            },
+            params={"model": payload.model, "input": payload.input},
         )
 
         completion_usage = results.usage
@@ -50,22 +57,27 @@ class Server:
         usage = OpenRouterUsage.model_validate(completion_usage.model_dump())
         total_cost = usage.cost
 
+        logger.info(
+            "Embedding response: agent=%s model=%s provider=%s cost=$%.8f",
+            payload.agent_name,
+            payload.model,
+            provider,
+            total_cost,
+        )
+
         response = self._parse_embedding_result(payload.input, results)
-        if response is not None:
-            response.provider = provider
-            response.usage = usage
-            response.total_cost = total_cost
+        response.provider = provider
+        response.usage = usage
+        response.total_cost = total_cost
 
         return response
 
     def _parse_embedding_result(
-        self, input: list[str] | str, results: CreateEmbeddingResponse | None
-    ) -> EmbeddingResponse | None:
+        self, input: list[str] | str, results: CreateEmbeddingResponse
+    ) -> EmbeddingResponse:
         embeddings: list[CustomEmbedding] = []
         embedding: CustomEmbedding
 
-        if results is None:
-            return None
         if isinstance(input, list):
             sorted_results = sorted(results.data, key=lambda d: d.index)
             for result in sorted_results:
@@ -79,6 +91,13 @@ class Server:
         return EmbeddingResponse(embeddings=embeddings)
 
     async def send_request_llm(self, payload: LLMPayload) -> LLMResponse:
+        logger.debug(
+            "LLM request: agent=%s model=%s messages=%d tools=%d",
+            payload.agent_name,
+            payload.model,
+            len(payload.messages),
+            len(payload.tools),
+        )
         params: CompletionCreateParamsNonStreaming = {
             "model": payload.model,
             "max_completion_tokens": payload.max_completion_tokens,
@@ -108,6 +127,15 @@ class Server:
             usage = OpenRouterUsage.model_validate(completion_usage.model_dump())
             total_cost = usage.cost
 
+        logger.info(
+            "LLM response: agent=%s model=%s provider=%s finish_reason=%s cost=$%.8f tool_calls=%d",
+            payload.agent_name,
+            payload.model,
+            provider,
+            finish_reason,
+            total_cost,
+            len(tool_calls),
+        )
         return LLMResponse(
             raw_response=result,
             message=message,
@@ -128,6 +156,7 @@ class Server:
             embedding = await openai_client.embeddings.create(**params)
             return embedding
         except OpenAIError as e:
+            logger.exception("Embedding request failed: agent=%s", agent_name)
             raise EmbeddingRequestError(agent_name, str(e)) from e
 
     async def _request_llm_non_streaming(
@@ -143,6 +172,7 @@ class Server:
             )
             return completion
         except OpenAIError as e:
+            logger.exception("LLM request failed: agent=%s", agent_name)
             raise LLMRequestError(agent_name, str(e)) from e
 
     async def _request_llm_streaming(
@@ -160,4 +190,5 @@ class Server:
             )
             return completion
         except OpenAIError as e:
+            logger.exception("LLM streaming request failed: agent=%s", agent_name)
             raise LLMRequestError(agent_name, str(e)) from e
