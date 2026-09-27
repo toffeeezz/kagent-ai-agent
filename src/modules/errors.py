@@ -1,4 +1,6 @@
 class ProgramError(Exception):
-    def __init__(self, message: str) -> None:
+    message: str
+
+    def __init__(self, message: str, *args: object) -> None:
+        super().__init__(*args)
         self.message = message
-        super().__init__(message)
