@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from enum import StrEnum
 from typing import Literal
 
@@ -19,7 +20,7 @@ class ServerPayload(BaseModel):
 
 
 class EmbeddingPayload(ServerPayload):
-    input: str | list[str]
+    input: str | Iterable[str]
     dimensions: int | None = None
     encoding_format: Literal["float", "base64"] | None = None
 
@@ -27,6 +28,12 @@ class EmbeddingPayload(ServerPayload):
 class LLMPayload(ServerPayload):
     messages: list[ChatCompletionMessageParam] = Field(default_factory=list)
     temperature: float = 1.0
+    top_p: float = 1.0
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    seed: int | None = None
+    stop: list[str] | None = None
+    response_format: dict[str, object] | None = None
     reasoning_effort: Literal["low", "medium", "high"] | None = None
     max_completion_tokens: int | None = None
     tools: list[ChatCompletionToolUnionParam] = Field(default_factory=list)
@@ -64,7 +71,7 @@ class CustomEmbedding(BaseModel):
 
 class LLMResponse(BaseModel):
     raw_response: ChatCompletion
-    message: ChatCompletionMessage | None = None
+    message: ChatCompletionMessage
     content: str = ""
     reasoning_details: list[ReasoningDetail] = Field(default_factory=list)
     reasoning: str = ""
