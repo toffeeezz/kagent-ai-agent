@@ -1,323 +1,320 @@
+import base64
 import json
 import logging
+import mimetypes
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, Iterable
-from typing import Generic, TypeVar, override
+from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
+from typing import Literal, cast, override
 
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
+    ChatCompletionContentPartImageParam,
     ChatCompletionContentPartParam,
-    ChatCompletionMessage,
     ChatCompletionMessageParam,
-    ChatCompletionMessageToolCallParam,
+    ChatCompletionToolChoiceOptionParam,
     ChatCompletionToolMessageParam,
+    ChatCompletionUserMessageParam,
 )
+from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 
 from modules.agents.errors import AgentError
-from modules.config.models import EmbeddingAgentConfig, TextAgentConfig
-from modules.server.models import (
-    EmbeddingPayload,
-    EmbeddingResponse,
-    FinishReason,
-    LLMPayload,
-    LLMResponse,
-)
+from modules.server.models import LLMParams, LLMPayload, LLMResponse
 from modules.server.server import Server
 from modules.toolkits.errors import ToolExecutionError
-from modules.toolkits.models import ToolCallEvent, ToolResult, ToolResultEvent
+from modules.toolkits.models import ToolResult
 from modules.toolkits.registry import ToolkitRegistry
-
-ConfigT = TypeVar("ConfigT")
-InputT = TypeVar("InputT")
-OutputT = TypeVar("OutputT")
 
 logger = logging.getLogger(__name__)
 
+ImageSource = str | Path | bytes
+Detail = Literal["auto", "low", "high"]
 
-class BaseAgent(ABC, Generic[InputT, ConfigT, OutputT]):
+
+def image_part(
+    source: ImageSource,
+    mime: str = "image/png",
+    detail: Detail | None = None,
+) -> ChatCompletionContentPartImageParam:
+    if isinstance(source, Path):
+        mime = mimetypes.guess_type(source.name)[0] or mime
+        url = f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode()}"
+    elif isinstance(source, bytes):
+        url = f"data:{mime};base64,{base64.b64encode(source).decode()}"
+    else:
+        url = source
+
+    image_url: ImageURL = {"url": url}
+    if detail is not None:
+        image_url["detail"] = detail
+    return {"type": "image_url", "image_url": image_url}
+
+
+def _preview(text: str | None, limit: int = 200) -> str:
+    """Single-line, truncated text for logs."""
+    flat = " ".join((text or "").split())
+    return (
+        flat
+        if len(flat) <= limit
+        else f"{flat[:limit]}... (+{len(flat) - limit} chars)"
+    )
+
+
+class BaseAgent(ABC):
+    """Owns config and the generate flow. Subclasses decide how a user
+    message becomes a payload (and whether history is kept)."""
+
     name: str
-    _server: Server
-
-    def __init__(self, name: str, server: Server) -> None:
-        self.name = name
-        self._server = server
-
-    @abstractmethod
-    async def run(self, model: str, config: ConfigT, input_data: InputT) -> OutputT: ...
-
-
-TextAgentInput = str | Iterable[ChatCompletionContentPartParam]
-EmbeddingAgentInput = str | Iterable[str]
-AgentStreamEvent = ToolCallEvent | ToolResultEvent | LLMResponse
-
-
-class TextAgent(BaseAgent[TextAgentInput, TextAgentConfig, LLMResponse]):
-    def _build_tool_catalog(self) -> str:
-        """Override in ToolCallingTextAgent; plain TextAgent has no tools."""
-        return ""
-
-    @override
-    async def run(
-        self,
-        model: str,
-        config: TextAgentConfig,
-        input_data: TextAgentInput,
-        history: list[ChatCompletionMessageParam] | None = None,
-    ) -> LLMResponse:
-        messages: list[ChatCompletionMessageParam] = list(history) if history else []
-        messages.append({"role": "user", "content": input_data})
-
-        payload = await self._build_payload(model, config, messages)
-        response = await self._server.send_request_llm(payload)
-        return response
-
-    async def _build_payload(
-        self,
-        model: str,
-        config: TextAgentConfig,
-        messages: list[ChatCompletionMessageParam],
-    ) -> LLMPayload:
-        payload = LLMPayload(
-            agent_name=self.name,
-            model=model,
-            messages=messages,
-            temperature=config.temperature,
-            top_p=config.top_p,
-            frequency_penalty=config.frequency_penalty,
-            presence_penalty=config.presence_penalty,
-            seed=config.seed,
-            stop=config.stop,
-            response_format=config.response_format,
-            reasoning_effort=config.reasoning_effort,
-            max_completion_tokens=config.max_completion_tokens,
-        )
-        return payload
-
-
-class EmbeddingAgent(
-    BaseAgent[EmbeddingAgentInput, EmbeddingAgentConfig, EmbeddingResponse]
-):
-    @override
-    async def run(
-        self, model: str, config: EmbeddingAgentConfig, input_data: EmbeddingAgentInput
-    ) -> EmbeddingResponse:
-        payload = await self._build_payload(model, config, input_data)
-        response = await self._server.send_request_embedding(payload)
-        return response
-
-    async def _build_payload(
-        self, model: str, config: EmbeddingAgentConfig, input_data: EmbeddingAgentInput
-    ) -> EmbeddingPayload:
-        payload = EmbeddingPayload(
-            agent_name=self.name,
-            model=model,
-            input=input_data,
-            dimensions=config.dimensions,
-            encoding_format=config.encoding_format,
-        )
-        return payload
-
-
-class ToolCallingTextAgent(TextAgent):
-    """Text agent that can invoke tools via a ToolkitRegistry, with a call→execute→call loop."""
-
-    tool_registry: ToolkitRegistry
+    _language_model: str
+    _system_prompt: str
+    _params: LLMParams
 
     def __init__(
-        self, name: str, server: Server, tool_registry: ToolkitRegistry
+        self, name: str, language_model: str, system_prompt: str, params: LLMParams
     ) -> None:
-        super().__init__(name, server)
-        self.tool_registry = tool_registry
+        self.name = name
+        self._language_model = language_model
+        self._system_prompt = system_prompt
+        self._params = params
 
-    @override
-    async def _build_payload(
+    async def generate(
         self,
-        model: str,
-        config: TextAgentConfig,
-        messages: list[ChatCompletionMessageParam],
-    ) -> LLMPayload:
-        payload = await super()._build_payload(model, config, messages)
-        payload.tools = self.tool_registry.schemas
-        return payload
-
-    @override
-    def _build_tool_catalog(self) -> str:
-        lines = ["## Available Tools"]
-        for schema in self.tool_registry.schemas:
-            if schema["type"] == "custom":
-                logger.error("Agent %s found a custom-type tool in its kit", self.name)
-                raise AgentError(
-                    f"A custom type tool was found inside a kit from {self.name}",
-                    self.name,
-                )
-            fn = schema["function"]
-            lines.append(f"- **{fn['name']}**: {fn.get('description')}")
-        logger.debug(
-            "Agent %s built tool catalog with %d tools", self.name, len(lines) - 1
+        server: Server,
+        input: str,
+        images: Sequence[ImageSource] | None = None,
+    ) -> LLMResponse:
+        logger.info(
+            "Prompt: agent=%s model=%s images=%d input=%s",
+            self.name,
+            self._language_model,
+            len(images or []),
+            _preview(input),
         )
-        return "\n".join(lines)
+        user_message = self._build_user_message(input, images)
+        payload = self._build_payload(user_message)
+        return await server.send_request_llm(payload)
 
-    def _message_to_param(
-        self, message: ChatCompletionMessage
-    ) -> ChatCompletionAssistantMessageParam:
-        param: ChatCompletionAssistantMessageParam = {
-            "role": "assistant",
-            "content": message.content,
-        }
+    def _build_user_message(
+        self, text: str, images: Sequence[ImageSource] | None = None
+    ) -> ChatCompletionUserMessageParam:
+        if not images:
+            return {"role": "user", "content": text}
+        parts: list[ChatCompletionContentPartParam] = [{"type": "text", "text": text}]
+        parts.extend(image_part(img) for img in images)
+        return {"role": "user", "content": parts}
 
-        if message.tool_calls:
-            param["tool_calls"] = []
-            for tool_call in message.tool_calls:
-                if tool_call.type != "function":
-                    logger.warning(
-                        "Agent %s tried to request a %s tool call",
-                        self.name,
-                        tool_call.type,
-                    )
-                    raise AgentError(
-                        message=f"Model tried to request a {tool_call.type!r} tool call which is not yet implemented",
-                        name=self.name,
-                    )
-                param["tool_calls"].append(
-                    ChatCompletionMessageToolCallParam(
-                        id=tool_call.id,
-                        type="function",
-                        function={
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments,
-                        },
-                    )
-                )
+    @abstractmethod
+    def _build_payload(
+        self, user_message: ChatCompletionUserMessageParam
+    ) -> LLMPayload: ...
 
-        return param
+
+class BasicAgent(BaseAgent):
+    """Stateless: every call is a fresh [system, user] exchange."""
 
     @override
+    def _build_payload(
+        self, user_message: ChatCompletionUserMessageParam
+    ) -> LLMPayload:
+        messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": self._system_prompt},
+            user_message,
+        ]
+        return LLMPayload(
+            agent_name=self.name,
+            model=self._language_model,
+            messages=messages,
+            params=self._params,
+        )
+
+
+class CompleteAgent(BaseAgent):
+    """Stateful: keeps history and exposes tools."""
+
+    _registry: ToolkitRegistry
+    _messages: list[ChatCompletionMessageParam]
+    _max_loops: int = 40
+
+    def __init__(
+        self,
+        name: str,
+        language_model: str,
+        system_prompt: str,
+        params: LLMParams,
+        registry: ToolkitRegistry,
+        max_loops: int = 40,
+    ) -> None:
+        super().__init__(name, language_model, system_prompt, params)
+        self._registry = registry
+        self._messages = [{"role": "system", "content": system_prompt}]
+        self._max_loops = max_loops
+
     async def run(
         self,
-        model: str,
-        config: TextAgentConfig,
-        input_data: TextAgentInput,
-        history: list[ChatCompletionMessageParam] | None = None,
-        max_loops: int = 40,
-    ) -> LLMResponse:
-        final: LLMResponse | None = None
-        async for event in self.run_stream(
-            model, config, input_data, history, max_loops
-        ):
-            if isinstance(event, LLMResponse):
-                final = event
-        assert final is not None, (
-            "run_stream must always yield a final LLMResponse or raise"
+        server: Server,
+        input: str,
+        images: Sequence[ImageSource] | None = None,
+        tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
+    ) -> AsyncIterator[LLMResponse]:
+        """Yields one LLMResponse per loop. The last one has no tool calls."""
+        user_message = self._build_user_message(input, images)
+        self._messages.append(user_message)
+
+        logger.info(
+            "Run start: agent=%s model=%s history=%d images=%d max_loops=%d input=%s",
+            self.name,
+            self._language_model,
+            len(self._messages),
+            len(images or []),
+            self._max_loops,
+            _preview(input),
         )
-        return final
+        total_cost = 0.0
 
-    async def run_stream(
-        self,
-        model: str,
-        config: TextAgentConfig,
-        input_data: TextAgentInput,
-        history: list[ChatCompletionMessageParam] | None = None,
-        max_loops: int = 40,
-    ) -> AsyncGenerator[AgentStreamEvent, None]:
-        messages: list[ChatCompletionMessageParam] = list(history) if history else []
-        messages.append({"role": "user", "content": input_data})
+        for loop in range(1, self._max_loops + 1):
+            logger.info(
+                "Loop %d/%d start: agent=%s messages=%d tools=%d tool_choice=%s",
+                loop,
+                self._max_loops,
+                self.name,
+                len(self._messages),
+                len(self._registry.schemas),
+                tool_choice or "auto",
+            )
+            payload = self._build_payload(user_message, tool_choice)
+            response = await server.send_request_llm(payload)
+            self._messages.append(self._to_assistant_param(response))
+            total_cost += response.total_cost
 
-        for _ in range(max_loops):
-            payload = await self._build_payload(model, config, messages)
-            response = await self._server.send_request_llm(payload)
+            tool_names = [
+                tc.function.name for tc in response.tool_calls if tc.type == "function"
+            ]
+            logger.info(
+                "Loop %d/%d response: agent=%s finish_reason=%s tools=%s "
+                "cost=$%.8f content=%s",
+                loop,
+                self._max_loops,
+                self.name,
+                response.finish_reason,
+                tool_names,
+                response.total_cost,
+                _preview(response.content),
+            )
 
-            message = response.message
-            messages.append(self._message_to_param(message))
-
-            if response.finish_reason == FinishReason.STOP:
+            if not response.tool_calls:
+                logger.info(
+                    "Run complete: agent=%s loops=%d total_cost=$%.8f",
+                    self.name,
+                    loop,
+                    total_cost,
+                )
                 yield response
                 return
 
-            if response.finish_reason == FinishReason.CONTENT_FILTER:
+            await self._run_tools(response)
+            yield response
+
+            tool_choice = None
+
+        logger.error(
+            "Run aborted: agent=%s exceeded %d loops total_cost=$%.8f",
+            self.name,
+            self._max_loops,
+            total_cost,
+        )
+        raise AgentError(f"{self.name} exceeded max iterations", self.name)
+
+    @override
+    async def generate(
+        self,
+        server: Server,
+        input: str,
+        images: Sequence[ImageSource] | None = None,
+        tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
+    ) -> LLMResponse:
+        """Drains run() and returns the final response."""
+        last: LLMResponse | None = None
+        async for last in self.run(server, input, images, tool_choice):
+            pass
+        if last is None:
+            raise AgentError(f"{self.name} produced no response", self.name)
+        return last
+
+    async def _run_tools(self, response: LLMResponse) -> None:
+        for tc in response.tool_calls:
+            if tc.type != "function":
                 logger.warning(
-                    "Content was filtered and halted during generation of agent %s",
+                    "Skipping non-function tool call: agent=%s type=%s id=%s",
                     self.name,
+                    tc.type,
+                    tc.id,
                 )
-                raise AgentError(
-                    message="The content was filtered during generation",
-                    name=self.name,
-                )
-
-            if response.finish_reason == FinishReason.LENGTH:
-                logger.warning(
-                    "Content exceeded max token length during generation of agent %s",
-                    self.name,
-                )
-                raise AgentError(
-                    message="The content exceeded max token length",
-                    name=self.name,
-                )
-
-            if response.finish_reason in (
-                FinishReason.TOOL_CALLS,
-                FinishReason.FUNCTION_CALL,
-            ):
-                tool_msgs: list[ChatCompletionToolMessageParam] = []
-                for tool_call in response.tool_calls:
-                    if tool_call.type != "function":
-                        logger.warning(
-                            "Agent %s tried to execute a %s tool call",
-                            self.name,
-                            tool_call.type,
-                        )
-                        raise AgentError(
-                            message=f"Tool call type {tool_call.type!r} is not yet implemented",
-                            name=self.name,
-                        )
-                    try:
-                        kwargs = json.loads(tool_call.function.arguments)
-                    except json.JSONDecodeError as e:
-                        logger.warning(
-                            "Agent %s received malformed tool arguments for %s",
-                            self.name,
-                            tool_call.function.name,
-                        )
-                        raise ToolExecutionError(
-                            message=f"Model produced invalid JSON arguments for tool {tool_call.function.name!r}: {e}",
-                            kit_name=None,
-                            tool_name=tool_call.function.name,
-                        ) from e
-
-                    yield ToolCallEvent(
-                        tool_name=tool_call.function.name, kwargs=kwargs
-                    )
-                    try:
-                        result = await self.tool_registry.execute_tool(
-                            agent_name=self.name,
-                            tool_name=tool_call.function.name,
-                            kwargs=kwargs,
-                        )
-                    except ToolExecutionError as e:
-                        result: ToolResult[str] = ToolResult(
-                            ok=False,
-                            message=f"An exception occured while executing the toot: {e}",
-                        )
-                    yield ToolResultEvent(
-                        tool_name=tool_call.function.name, result=result
-                    )
-
-                    tool_msgs.append(
-                        {
-                            "role": "tool",
-                            "content": result.to_content(),
-                            "tool_call_id": tool_call.id,
-                        }
-                    )
-
-                messages.extend(tool_msgs)
                 continue
+            content = await self._execute_tool(tc.function.name, tc.function.arguments)
+            tool_message: ChatCompletionToolMessageParam = {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": content,
+            }
+            self._messages.append(tool_message)
 
-            raise AgentError(
-                message=f"Unexpected finish reason: {response.finish_reason}",
-                name=self.name,
+    async def _execute_tool(self, name: str, raw_args: str) -> str:
+        """Always returns tool-message content. Failures become ok=False
+        results so the model can see them and retry."""
+        try:
+            parsed = json.loads(raw_args or "{}")
+            if not isinstance(parsed, dict):
+                raise TypeError("arguments must be a JSON object")
+            kwargs = cast(dict[str, object], parsed)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(
+                "Bad tool arguments: agent=%s tool=%s err=%s", self.name, name, e
             )
+            return ToolResult[None](
+                ok=False, message=f"Invalid arguments: {e}"
+            ).to_content()
 
-        logger.warning("Agent %s exceeded max loop count", self.name)
-        raise AgentError(
-            message=f"Agent {self.name} exceeded max loop count", name=self.name
+        try:
+            result = await self._registry.execute_tool(self.name, name, kwargs)
+        except ToolExecutionError as e:
+            return ToolResult[None](ok=False, message=str(e)).to_content()
+
+        return result.to_content()
+
+    def _to_assistant_param(
+        self, response: LLMResponse
+    ) -> ChatCompletionAssistantMessageParam:
+        msg = response.message
+        param: ChatCompletionAssistantMessageParam = {
+            "role": "assistant",
+            "content": msg.content,
+        }
+        if msg.tool_calls:
+            param["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in msg.tool_calls
+                if tc.type == "function"
+            ]
+        return param
+
+    @override
+    def _build_payload(
+        self,
+        user_message: ChatCompletionUserMessageParam,
+        tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
+    ) -> LLMPayload:
+        return LLMPayload(
+            agent_name=self.name,
+            model=self._language_model,
+            messages=list(self._messages),
+            params=self._params,
+            tools=self._registry.schemas,
+            tool_choice=tool_choice or "auto",
         )
