@@ -100,12 +100,12 @@ class Server:
         )
         params: CompletionCreateParamsNonStreaming = {
             "model": payload.model,
-            "max_completion_tokens": payload.max_completion_tokens,
+            "max_completion_tokens": payload.params.max_completion_tokens,
             "messages": payload.messages,
             "tools": payload.tools,
             "tool_choice": payload.tool_choice,
             "stream": False,
-            "reasoning_effort": payload.reasoning_effort,
+            "reasoning_effort": payload.params.reasoning_effort,
         }
         result = await self._request_llm_non_streaming(
             self.client, payload.agent_name, params=params

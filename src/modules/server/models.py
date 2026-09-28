@@ -14,6 +14,18 @@ from openai.types.chat import (
 from pydantic import BaseModel, Field
 
 
+class LLMParams(BaseModel):
+    temperature: float = 1.0
+    top_p: float = 1.0
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    seed: int | None = None
+    stop: list[str] | None = None
+    response_format: dict[str, object] | None = None
+    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    max_completion_tokens: int | None = None
+
+
 class ServerPayload(BaseModel):
     agent_name: str
     model: str
@@ -27,18 +39,10 @@ class EmbeddingPayload(ServerPayload):
 
 class LLMPayload(ServerPayload):
     messages: list[ChatCompletionMessageParam] = Field(default_factory=list)
-    temperature: float = 1.0
-    top_p: float = 1.0
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    seed: int | None = None
-    stop: list[str] | None = None
-    response_format: dict[str, object] | None = None
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
-    max_completion_tokens: int | None = None
     tools: list[ChatCompletionToolUnionParam] = Field(default_factory=list)
     tool_choice: ChatCompletionToolChoiceOptionParam = "auto"
     stream: bool = False
+    params: LLMParams = LLMParams()
 
 
 class OpenRouterUsage(BaseModel):
