@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, final
 
 from openai.types.chat import (
     ChatCompletion,
@@ -11,10 +11,12 @@ from openai.types.chat import (
     ChatCompletionToolChoiceOptionParam,
     ChatCompletionToolUnionParam,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LLMParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     temperature: float = 1.0
     top_p: float = 1.0
     frequency_penalty: float = 0.0
