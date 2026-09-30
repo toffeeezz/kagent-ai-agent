@@ -1,0 +1,92 @@
+import logging
+from pathlib import Path
+
+import frontmatter
+import yaml
+from pydantic import ValidationError
+
+from modules.agents.models import AgentDefinition, BasicAgent, CompleteAgent
+from modules.errors import ProgramError
+from modules.toolkits.registry import REGISTRY
+
+AGENT_DEFINITION_DIR = Path(__file__).resolve().parent / "definitions"
+GLOBAL_SYSTEM_PROMPT = Path(__file__).resolve().parent / "GLOBAL_SYSTEM_PROMPT.md"
+
+logger = logging.getLogger(__name__)
+
+
+def _build_agent(
+    definition: AgentDefinition, system_prompt: str
+) -> CompleteAgent | BasicAgent:
+    if definition.type == "basic":
+        return BasicAgent(
+            name=definition.name,
+            language_model=definition.language_model,
+            system_prompt=system_prompt,
+            params=definition.params,
+        )
+    else:
+        return CompleteAgent(
+            name=definition.name,
+            language_model=definition.language_model,
+            params=definition.params,
+            registry=REGISTRY,
+            system_prompt=f"{GLOBAL_SYSTEM_PROMPT.read_text()}\n{system_prompt}",
+        )
+
+
+def scan_agent_dir() -> tuple[dict[str, BasicAgent], dict[str, CompleteAgent]]:
+    if not AGENT_DEFINITION_DIR.exists():
+        logger.error(
+            "Agent definitions directory is missing. Expected: %s", AGENT_DEFINITION_DIR
+        )
+        raise ProgramError(
+            f"Agent definitions directory is missing: {AGENT_DEFINITION_DIR}"
+        )
+
+    if not GLOBAL_SYSTEM_PROMPT.exists():
+        logger.error(
+            "Agent global system prompt markdown is missing. Expected: %s",
+            GLOBAL_SYSTEM_PROMPT,
+        )
+        raise ProgramError(
+            f"Agents global system prompt is missing: {GLOBAL_SYSTEM_PROMPT}"
+        )
+
+    basic_agents: dict[str, BasicAgent] = {}
+    complete_agents: dict[str, CompleteAgent] = {}
+
+    for file in AGENT_DEFINITION_DIR.iterdir():
+        if not file.is_file():
+            logger.warning("Ignoring a non-file in the directoy: %s", file.name)
+            continue
+        if file.suffix != ".md":
+            logger.warning("Ignoring a non-markdown file: %s", file.name)
+
+        try:
+            post = frontmatter.load(file)
+            definition = AgentDefinition.model_validate(post.metadata)
+            prompt = post.content
+
+            agent = _build_agent(definition, prompt)
+            if isinstance(agent, BasicAgent):
+                basic_agents[agent.name] = agent
+            else:
+                complete_agents[agent.name] = agent
+
+            return basic_agents, complete_agents
+
+        except yaml.YAMLError:
+            logger.warning(
+                "Ignoring a definition with an invalid yaml syntax: %s", file.name
+            )
+            continue
+        except ValidationError as e:
+            logger.warning(
+                "Ignoring a definition with an invalid parameter in params: %s -> %s",
+                file.name,
+                e,
+            )
+            continue
+
+    return basic_agents, complete_agents
