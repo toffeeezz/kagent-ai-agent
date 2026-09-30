@@ -50,7 +50,13 @@ def build_tool(kit_name: str, blueprint: ToolBlueprint) -> Tool:
 
 
 def build_toolkit(
-    name: str, desc: str, blueprints: list[ToolBlueprint], core: bool = False
+    name: str,
+    desc: str,
+    instructions: str,
+    blueprints: list[ToolBlueprint],
+    core: bool = False,
 ) -> ToolKit:
     tools = {bp.func.__name__: build_tool(name, bp) for bp in blueprints}
-    return ToolKit(name=name, desc=desc, tools=tools, core=core)
+    return ToolKit(
+        name=name, desc=desc, tools=tools, instructions=instructions, core=core
+    )

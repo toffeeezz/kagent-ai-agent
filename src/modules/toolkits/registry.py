@@ -30,12 +30,13 @@ class ToolkitRegistry:
 
         # the registry's own kit, built from its bound methods
         registry_kit = build_toolkit(
-            "registry",
-            "Tools for finding and enabling other toolkits",
-            [
+            name="registry",
+            desc="Tools for finding and enabling other toolkits",
+            blueprints=[
                 ToolBlueprint(func=self.register_kit),
                 ToolBlueprint(func=self.list_kits),
             ],
+            instructions="",
             core=True,
         )
 
@@ -68,6 +69,10 @@ class ToolkitRegistry:
     @property
     def available_kits(self) -> dict[str, ToolKit]:
         return self._available_kits
+
+    @property
+    def skills(self) -> str:
+        return "\n".join(tool.instructions for tool in self._registered_kits.values())
 
     @staticmethod
     def _check_unique(kits: list[ToolKit]) -> None:

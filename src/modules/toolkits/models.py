@@ -38,6 +38,7 @@ class ToolCall:
 class ToolKit:
     name: str
     desc: str
+    instructions: str
     tools: dict[str, Tool]
     core: bool = False
 

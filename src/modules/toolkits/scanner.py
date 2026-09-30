@@ -22,7 +22,6 @@ def _collect_tool_funcs(tools_module: ModuleType) -> list[Callable[..., object]]
     funcs: list[Callable[..., object]] = []
 
     for name, func in inspect.getmembers(tools_module, inspect.isfunction):
-        # skip functions imported from other modules
         if func.__module__ != tools_module.__name__:
             continue
 
@@ -73,8 +72,8 @@ def scan_toolkit_dir() -> list[ToolKit]:
                 message=f"Failed to load {package}: {e}", kit_name=item.name
             ) from e
 
-        # read description and core flag from SKILL.md
-        metadata = frontmatter.load(skill_file).metadata
+        post = frontmatter.load(skill_file)
+        metadata = post.metadata
         kit_name = str(metadata.get("name", "")).strip()
         desc = str(metadata.get("description", "")).strip()
         if not desc:
@@ -95,7 +94,7 @@ def scan_toolkit_dir() -> list[ToolKit]:
         ]
 
         try:
-            kit = build_toolkit(kit_name, desc, blueprints, core)
+            kit = build_toolkit(kit_name, desc, post.content, blueprints, core)
         except Exception as e:
             raise ToolKitError(
                 message=f"Failed to build schemas for kit {item.name}: {e}",
