@@ -1,23 +1,22 @@
 [project]
 name = "kagent"
-version = "0.1.1"
-description = "A tool-calling LLM agent wrapper based on Ame-chan from Needy Streamer Overload."
+version = "0.2.0"
+description = "A multi-agent framework with a personality of an unstable and insecure girl"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "toffeezzz" }]
 dependencies = [
   "openai>=2.54.0,<3.0.0",
-  "rich",
   "pydantic",
   "send2trash",
   "python-dotenv",
-  "prompt-toolkit",
   "markdown",
   "pyqt6",
   "PyMuPDF",
   "python-frontmatter",
   "pymupdf4llm",
+  "sqlite-vec",
 ]
 
 [tool.setuptools.packages.find]
@@ -26,8 +25,8 @@ where = ["src"]
 [project.scripts]
 kagent = "main:main"
 
-[project.entry-points."pygments.styles"]
-toffeezzz-pink = "modules.gui.toffeezzz_pink:ToffeezzzPink"
+[project.optional-dependencies]
+dev = ["ruff", "rich", "pytest", "pytest-asyncio"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
