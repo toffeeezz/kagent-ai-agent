@@ -1,5 +1,4 @@
 import base64
-import copy
 import json
 import logging
 import mimetypes
@@ -8,7 +7,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
-from typing import Literal, cast, override
+from typing import Any, Literal, cast, override
 
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -24,6 +23,14 @@ from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from modules.agents.errors import AgentError
+from modules.agents.events import (
+    AgentEvent,
+    GeneratingResponse,
+    GenerationFinished,
+    RunError,
+    ToolCallFinished,
+    ToolCallStarted,
+)
 from modules.server.models import LLMParams, LLMPayload, LLMResponse
 from modules.server.server import Server
 from modules.toolkits.errors import ToolExecutionError
@@ -228,12 +235,73 @@ class CompleteAgent(BaseAgent):
         input: str,
         images: Sequence[ImageSource] | None = None,
         tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
-    ) -> AsyncIterator[LLMResponse]:
-        """Yields one LLMResponse per loop. The last one has no tool calls. This is used for the UI.
+        history: list[ChatCompletionMessageParam] | None = None,
+    ) -> AsyncIterator[AgentEvent]:
+        """Yields UI events as the run progresses.
 
-        If the run fails, the error is recorded in this agent's history as a
-        tool message and then re-raised.
+        Per loop: GeneratingResponse, GenerationFinished, then a
+        ToolCallStarted/ToolCallFinished pair for each tool call. The last
+        loop ends with a GenerationFinished and no tool events.
+
+        Failures are recorded in history and surfaced as a final RunError
+        event instead of raising. Cancellation still propagates.
         """
+        try:
+            async for item in self._run_loop(
+                server, username, input, images, tool_choice, history
+            ):
+                if isinstance(item, LLMResponse):
+                    yield GenerationFinished(item.content or "", item.reasoning)
+                else:
+                    yield item
+        except Exception as e:
+            yield RunError(f"{type(e).__name__}: {e}")
+
+    @override
+    async def generate(
+        self,
+        server: Server,
+        username: str,
+        input: str,
+        images: Sequence[ImageSource] | None = None,
+        tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
+    ) -> LLMResponse:
+        """Drains the loop and returns the final response. Raises on failure."""
+        last: LLMResponse | None = None
+        async for item in self._run_loop(server, username, input, images, tool_choice):
+            if isinstance(item, LLMResponse):
+                last = item
+        if last is None:
+            raise AgentError(f"{self.name} produced no response", self.name)
+        return last
+
+    async def _run_loop(
+        self,
+        server: Server,
+        username: str,
+        input: str,
+        images: Sequence[ImageSource] | None,
+        tool_choice: ChatCompletionToolChoiceOptionParam | None,
+        history: list[ChatCompletionMessageParam] | None = None,
+    ) -> AsyncIterator[AgentEvent | LLMResponse]:
+        """The actual agent loop. Yields raw LLMResponses (for generate())
+        interleaved with tool/progress events (for run()).
+
+        On failure or cancellation the error is recorded in history and
+        re-raised.
+        """
+        if history is not None:
+            self._messages = [
+                self._messages[0],
+                *(m for m in history if m["role"] != "system"),
+            ]
+            if pending := self._pending_tool_call_ids():
+                logger.warning(
+                    "History has %d unanswered tool call(s): agent=%s",
+                    len(pending),
+                    self.name,
+                )
+
         user_message = self._build_user_message(input, username, images)
         self._messages.append(user_message)
         _log_say(f"User {username}", input, len(images or []))
@@ -261,6 +329,7 @@ class CompleteAgent(BaseAgent):
                     len(self._registry.schemas),
                     tool_choice or "auto",
                 )
+                yield GeneratingResponse()
                 response = await server.send_request_llm(payload)
                 self._messages.append(self._to_assistant_param(response))
                 total_cost += response.total_cost
@@ -300,36 +369,22 @@ class CompleteAgent(BaseAgent):
                     yield response
                     return
 
-                await self._run_tools(response)
-                yield response
+                yield response  # show the text before the tools run
+                async for event in self._run_tools(response):
+                    yield event
 
                 tool_choice = None
 
             raise AgentError(f"{self.name} exceeded max iterations", self.name)
-        except Exception as e:
+        except BaseException as e:
+            # BaseException so that cancellation (Stop button) also leaves
+            # the history valid: no unanswered tool calls.
             if not finished:
                 logger.exception(
                     "Run failed: agent=%s total_cost=$%.8f", self.name, total_cost
                 )
                 self._record_failure(e)
             raise
-
-    @override
-    async def generate(
-        self,
-        server: Server,
-        username: str,
-        input: str,
-        images: Sequence[ImageSource] | None = None,
-        tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
-    ) -> LLMResponse:
-        """Drains run() and returns the final response."""
-        last: LLMResponse | None = None
-        async for last in self.run(server, username, input, images, tool_choice):
-            pass
-        if last is None:
-            raise AgentError(f"{self.name} produced no response", self.name)
-        return last
 
     def _pending_tool_call_ids(self) -> list[str]:
         """Tool calls in the history that never got a tool message."""
@@ -342,7 +397,7 @@ class CompleteAgent(BaseAgent):
                 answered.add(m["tool_call_id"])
         return [call_id for call_id in requested if call_id not in answered]
 
-    def _record_failure(self, error: Exception) -> None:
+    def _record_failure(self, error: BaseException) -> None:
         """Write the failure into the history as a tool message so the agent
         knows what happened on its next turn.
 
@@ -387,7 +442,14 @@ class CompleteAgent(BaseAgent):
                 {"role": "tool", "tool_call_id": call_id, "content": content}
             )
 
-    async def _run_tools(self, response: LLMResponse) -> None:
+    @staticmethod
+    def _parse_args(raw_args: str) -> dict[str, object]:
+        parsed = json.loads(raw_args or "{}")
+        if not isinstance(parsed, dict):
+            raise TypeError("arguments must be a JSON object")
+        return cast(dict[str, object], parsed)
+
+    async def _run_tools(self, response: LLMResponse) -> AsyncIterator[AgentEvent]:
         for tc in response.tool_calls:
             if tc.type != "function":
                 logger.warning(
@@ -397,33 +459,43 @@ class CompleteAgent(BaseAgent):
                     tc.id,
                 )
                 continue
-            content = await self._execute_tool(tc.function.name, tc.function.arguments)
+
+            name = tc.function.name
+            kwargs: dict[str, object] = {}
+            result: ToolResult[Any] | None = None
+
+            try:
+                kwargs = self._parse_args(tc.function.arguments)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(
+                    "Bad tool arguments: agent=%s tool=%s err=%s", self.name, name, e
+                )
+                result = ToolResult[None](ok=False, message=f"Invalid arguments: {e}")
+
+            yield ToolCallStarted(tc.id, name, kwargs)
+
+            if result is None:
+                logger.info(
+                    "Tool call: agent=%s tool=%s args=%s",
+                    self.name,
+                    name,
+                    _preview(tc.function.arguments),
+                )
+                result = await self._execute_tool(name, kwargs)
+
             tool_message: ChatCompletionToolMessageParam = {
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": content,
+                "content": result.to_content(),
             }
             self._messages.append(tool_message)
+            yield ToolCallFinished(tc.id, result.ok, _preview(result.message))
 
-    async def _execute_tool(self, name: str, raw_args: str) -> str:
-        """Always returns tool-message content. Failures become ok=False
-        results so the model can see them and retry."""
-        try:
-            parsed = json.loads(raw_args or "{}")
-            if not isinstance(parsed, dict):
-                raise TypeError("arguments must be a JSON object")
-            kwargs = cast(dict[str, object], parsed)
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.warning(
-                "Bad tool arguments: agent=%s tool=%s err=%s", self.name, name, e
-            )
-            return ToolResult[None](
-                ok=False, message=f"Invalid arguments: {e}"
-            ).to_content()
-
-        logger.info(
-            "Tool call: agent=%s tool=%s args=%s", self.name, name, _preview(raw_args)
-        )
+    async def _execute_tool(
+        self, name: str, kwargs: dict[str, object]
+    ) -> ToolResult[Any]:
+        """Never raises. Failures become ok=False results so the model can
+        see them and retry."""
         started = time.perf_counter()
         try:
             result = await self._registry.execute_tool(self.name, name, kwargs)
@@ -435,7 +507,7 @@ class CompleteAgent(BaseAgent):
                 time.perf_counter() - started,
                 e,
             )
-            return ToolResult[None](ok=False, message=str(e)).to_content()
+            return ToolResult[None](ok=False, message=str(e))
         except Exception as e:
             logger.exception(
                 "Tool crashed: agent=%s tool=%s elapsed=%.2fs",
@@ -445,18 +517,17 @@ class CompleteAgent(BaseAgent):
             )
             return ToolResult[None](
                 ok=False, message=f"Tool crashed with {type(e).__name__}: {e}"
-            ).to_content()
+            )
 
-        content = result.to_content()
         logger.info(
             "Tool result: agent=%s tool=%s ok=%s elapsed=%.2fs result=%s",
             self.name,
             name,
             result.ok,
             time.perf_counter() - started,
-            _preview(content),
+            _preview(result.to_content()),
         )
-        return content
+        return result
 
     def _to_assistant_param(
         self, response: LLMResponse
@@ -506,6 +577,7 @@ class AgentDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    image_path: str = ""
     type: Literal["basic", "complete"]
     language_model: str
     max_loop: int | None = None
@@ -515,4 +587,10 @@ class AgentDefinition(BaseModel):
     def check_max_loop(self):
         if self.type == "basic" and "max_loop" in self.model_fields_set:
             raise ValueError("max_loop is only allowed for a 'complete' agent type")
+        return self
+
+    @model_validator(mode="after")
+    def check_image_path(self):
+        if self.type == "basic" and "image_path" in self.model_fields_set:
+            raise ValueError("image_path is only allowed for a 'complete' agent type")
         return self
