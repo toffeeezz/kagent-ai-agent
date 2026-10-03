@@ -12,12 +12,7 @@ CustomRect {
     anchors.fill: parent
     spacing: 0
 
-    CustomRect {
-      id: chatArea
-
-      Layout.fillHeight: true
-      Layout.fillWidth: true
-    }
+    ChatPanel {}
 
     InputPanel {}
   }
