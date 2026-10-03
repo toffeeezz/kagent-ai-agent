@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 import "../generic"
 
@@ -58,6 +59,60 @@ CustomRect {
         font.pixelSize: 16
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
+      }
+
+      CustomRect {
+        id: newSessionBtn
+
+        readonly property int bulletSize: 12
+
+        Layout.fillWidth: true
+        Layout.preferredHeight: 40
+        Layout.leftMargin: 10
+        Layout.rightMargin: 10
+        radius: 15
+        clip: true
+        scale: 0.9
+
+        Behavior on scale {
+          NumberAnimation {
+            duration: 100
+            easing.type: Easing.InOutCubic
+          }
+        }
+
+        RowLayout {
+          anchors.fill: parent
+          anchors.margins: 10
+          spacing: 0
+
+          CustomRect {
+            Layout.preferredHeight: newSessionBtn.bulletSize
+            Layout.preferredWidth: newSessionBtn.bulletSize
+            radius: newSessionBtn.bulletSize
+          }
+
+          Text {
+            text: "New Session"
+
+            elide: Text.ElideRight
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+          }
+        }
+
+        MouseArea {
+          id: mouseArea
+
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onPressed: newSessionBtn.scale = 0.8
+          onReleased: newSessionBtn.scale = 1
+          onEntered: newSessionBtn.scale = 1
+          onExited: newSessionBtn.scale = 0.9
+          onClicked: controller.createSession()
+        }
       }
 
       ListView {
