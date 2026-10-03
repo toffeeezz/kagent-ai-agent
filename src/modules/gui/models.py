@@ -114,7 +114,7 @@ class MessageListModel(QAbstractListModel):
 
     def __init__(self) -> None:
         super().__init__()
-        self._sessions: list[MessageRow] = []
+        self._messages: list[MessageRow] = []
 
     @override
     def roleNames(self) -> dict[int, QByteArray]:
@@ -126,13 +126,13 @@ class MessageListModel(QAbstractListModel):
 
     @override
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return 0 if parent.isValid() else len(self._sessions)
+        return 0 if parent.isValid() else len(self._messages)
 
     @override
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        if not index.isValid() or not 0 <= index.row() < len(self._sessions):
+        if not index.isValid() or not 0 <= index.row() < len(self._messages):
             return None
-        s = self._sessions[index.row()]
+        s = self._messages[index.row()]
         if role == self.TextRole:
             return s.text
         if role == self.IdRole:
@@ -143,26 +143,26 @@ class MessageListModel(QAbstractListModel):
 
     def reset_to(self, messages: list[MessageRow]) -> None:
         self.beginResetModel()
-        self._sessions = list(messages)
+        self._messages = list(messages)
         self.endResetModel()
 
-    def prepend(self, message: MessageRow) -> None:
-        self.beginInsertRows(QModelIndex(), 0, 0)
-        self._sessions.insert(0, message)
+    def append(self, message: MessageRow) -> None:
+        self.beginInsertRows(QModelIndex(), len(self._messages), len(self._messages))
+        self._messages.append(message)
         self.endInsertRows()
 
     def remove_by_id(self, message_id: int) -> None:
-        for i, s in enumerate(self._sessions):
+        for i, s in enumerate(self._messages):
             if s.id == message_id:
                 self.beginRemoveRows(QModelIndex(), i, i)
-                del self._sessions[i]
+                del self._messages[i]
                 self.endRemoveRows()
                 return
 
     def edit_by_id(self, message_id: int, text: str) -> None:
-        for i, s in enumerate(self._sessions):
+        for i, s in enumerate(self._messages):
             if s.id == message_id:
-                self._sessions[i] = s.model_copy(update={"text": text})
+                self._messages[i] = s.model_copy(update={"text": text})
                 idx = self.index(i)
                 self.dataChanged.emit(idx, idx, [self.TextRole])
                 return
