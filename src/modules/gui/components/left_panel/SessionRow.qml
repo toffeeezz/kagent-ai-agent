@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 import "../generic"
 
@@ -54,7 +55,77 @@ CustomRect {
     onReleased: root.scale = 1
     onEntered: root.scale = 1
     onExited: root.scale = 0.9
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
 
-    onClicked: controller.selectSession(root.sessionId, root.title)
+    onClicked: mouse => {
+      if (mouse.button === Qt.RightButton) {
+        controller.selectSession(root.sessionId, root.title);
+        menu.popup(root, 0, root.height);
+      } else if (mouse.button === Qt.LeftButton)
+        controller.selectSession(root.sessionId, root.title);
+    }
+  }
+
+  Menu {
+    id: menu
+
+    MenuItem {
+      text: "Edit name"
+      onTriggered: {
+        renameField.text = root.title;
+        renameDialog.open();
+      }
+    }
+
+    MenuSeparator {}
+
+    MenuItem {
+      text: "Delete"
+      onTriggered: deleteDialog.open()
+    }
+  }
+
+  Dialog {
+    id: renameDialog
+
+    title: "Edit name"
+    parent: Overlay.overlay
+    anchors.centerIn: Overlay.overlay
+    width: 300
+    modal: true
+    standardButtons: Dialog.Ok | Dialog.Cancel
+
+    onOpened: {
+      renameField.forceActiveFocus();
+      renameField.selectAll();
+    }
+    onAccepted: {
+      const name = renameField.text.trim();
+      if (name.length > 0 && name !== root.title)
+        controller.renameSession(root.sessionId, name);
+    }
+
+    TextField {
+      id: renameField
+      anchors.left: parent.left
+      anchors.right: parent.right
+      onAccepted: renameDialog.accept()   // Enter confirms
+    }
+  }
+
+  Dialog {
+    id: deleteDialog
+
+    title: "Delete session?"
+    parent: Overlay.overlay
+    anchors.centerIn: Overlay.overlay
+    modal: true
+    standardButtons: Dialog.Yes | Dialog.Cancel
+
+    onAccepted: controller.deleteSession(root.sessionId)
+
+    Text {
+      text: "\"" + root.title + "\" will be permanently deleted."
+    }
   }
 }
