@@ -159,26 +159,25 @@ class AppController(QObject):
             match event:
                 case GeneratingResponse():
                     print("thinking")
-                case GenerationFinished(content=c) if c.strip():
+                case GenerationFinished(content=c):
                     if not user_saved:
                         _ = self._session_backend.add_message(
                             session_id, "user", text, username
                         )
                         user_saved = True
 
-                    message_row = self._session_backend.add_message(
-                        session_id, "assistant", c, agent_name
-                    )
-                    if self._selected_session_id == session_id:
-                        self._message_list_model.append(message_row)
+                    if c.strip():
+                        message_row = self._session_backend.add_message(
+                            session_id, "assistant", c, agent_name
+                        )
+                        if self._selected_session_id == session_id:
+                            self._message_list_model.append(message_row)
                 case ToolCallStarted(name=n):
                     ...
                 case ToolCallFinished(ok=ok, summary=s):
                     ...
                 case RunError(message=m):
                     logger.warning("Run failed, user message not saved: %s", m)
-                case _:
-                    logger.warning("Event returned an unhandled case %s", type(event))
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
