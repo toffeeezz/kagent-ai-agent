@@ -1,0 +1,146 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import "../generic"
+
+Item {
+  id: root
+  required property string text
+  required property string role
+  readonly property bool fromUser: role === "user"
+
+  property bool shown: false
+  property bool animateIn: true
+
+  readonly property var blocks: {
+    const out = [];
+    const re = /(`{3,})(\w*)\n([\s\S]*?)\1/g;
+    let last = 0, message;
+    while ((message = re.exec(text)) !== null) {
+      if (message.index > last)
+        out.push({
+          type: "text",
+          lang: "",
+          body: text.slice(last, message.index).trim()
+        });
+      out.push({
+        type: "code",
+        lang: message[2],
+        body: message[3].replace(/\n$/, "")
+      });
+      last = re.lastIndex;
+    }
+    if (last < text.length)
+      out.push({
+        type: "text",
+        lang: "",
+        body: text.slice(last).trim()
+      });
+    return out.filter(b => b.body.length > 0);
+  }
+
+  width: ListView.view.width
+  height: bubble.height
+
+  CustomRect {
+    id: bubble
+    width: Math.min(400, root.width * 0.75)
+    height: content.implicitHeight + 16
+
+    x: root.shown ? (root.fromUser ? root.width - width : 0) : (root.fromUser ? root.width : -width)
+
+    radius: 10
+
+    Behavior on x {
+      enabled: root.animateIn
+      SpringAnimation {
+        spring: 3
+        damping: 0.2
+      }
+    }
+
+    Column {
+      id: content
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      anchors.margins: 8
+      spacing: 8
+
+      Repeater {
+        model: root.blocks
+
+        delegate: Loader {
+          id: blockLoader
+          required property var modelData
+
+          width: content.width
+          sourceComponent: modelData.type === "code" ? codeBlock : textBlock
+
+          Component {
+            id: textBlock
+
+            TextEdit {
+              text: blockLoader.modelData.body
+              textFormat: TextEdit.MarkdownText
+              readOnly: true
+              selectByMouse: true
+              wrapMode: TextEdit.Wrap
+              onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+          }
+
+          Component {
+            id: codeBlock
+
+            Rectangle {
+              color: "#1e1e1e"
+              radius: 6
+              implicitHeight: codeEdit.y + codeEdit.implicitHeight + 8
+
+              Text {
+                x: 8
+                y: 6
+                text: blockLoader.modelData.lang
+                color: "#888888"
+                font.pixelSize: 11
+              }
+
+              Button {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 4
+                text: "Copy"
+                onClicked: {
+                  codeEdit.selectAll();
+                  codeEdit.copy();
+                  codeEdit.deselect();
+                }
+              }
+
+              TextEdit {
+                id: codeEdit
+                x: 8
+                y: 32
+                width: parent.width - 16
+                text: blockLoader.modelData.body
+                readOnly: true
+                selectByMouse: true
+                font.family: "monospace"
+                color: "#d4d4d4"
+                wrapMode: TextEdit.WrapAnywhere
+
+                Component.onCompleted: highlighter.attach(textDocument, blockLoader.modelData.lang)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Component.onCompleted: {
+    shown = true;
+  }
+}
