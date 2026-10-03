@@ -4,6 +4,7 @@
 *.ruff_cache
 *.json
 *.db
+*.ini
 
 #Directories
 __pycache__/
