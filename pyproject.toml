@@ -12,18 +12,18 @@ dependencies = [
   "send2trash",
   "python-dotenv",
   "markdown",
-  "pyqt6",
+  "PyQt6",
+  "PyQt6-stubs",
   "PyMuPDF",
   "python-frontmatter",
   "pymupdf4llm",
-  "sqlite-vec",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [project.scripts]
-kagent = "main:main"
+kagent = "modules.gui.app:main"
 
 [project.optional-dependencies]
 dev = ["ruff", "rich", "pytest", "pytest-asyncio"]
@@ -31,3 +31,6 @@ dev = ["ruff", "rich", "pytest", "pytest-asyncio"]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+reportUntypedFunctionDecorator = "none"
