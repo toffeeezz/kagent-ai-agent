@@ -35,7 +35,9 @@ def _build_agent(
         )
 
 
-def scan_agent_dir() -> tuple[dict[str, BasicAgent], dict[str, CompleteAgent]]:
+def scan_agent_dir() -> tuple[
+    dict[str, BasicAgent], dict[str, CompleteAgent], list[AgentDefinition]
+]:
     if not AGENT_DEFINITION_DIR.exists():
         logger.error(
             "Agent definitions directory is missing. Expected: %s", AGENT_DEFINITION_DIR
@@ -55,13 +57,16 @@ def scan_agent_dir() -> tuple[dict[str, BasicAgent], dict[str, CompleteAgent]]:
 
     basic_agents: dict[str, BasicAgent] = {}
     complete_agents: dict[str, CompleteAgent] = {}
+    agent_definitions: list[AgentDefinition] = []
 
     for file in AGENT_DEFINITION_DIR.iterdir():
+        print(file.name)
         if not file.is_file():
             logger.warning("Ignoring a non-file in the directoy: %s", file.name)
             continue
         if file.suffix != ".md":
             logger.warning("Ignoring a non-markdown file: %s", file.name)
+            continue
 
         try:
             post = frontmatter.load(file)
@@ -69,12 +74,11 @@ def scan_agent_dir() -> tuple[dict[str, BasicAgent], dict[str, CompleteAgent]]:
             prompt = post.content
 
             agent = _build_agent(definition, prompt)
+            agent_definitions.append(definition)
             if isinstance(agent, BasicAgent):
                 basic_agents[agent.name] = agent
             else:
                 complete_agents[agent.name] = agent
-
-            return basic_agents, complete_agents
 
         except yaml.YAMLError:
             logger.warning(
@@ -88,5 +92,12 @@ def scan_agent_dir() -> tuple[dict[str, BasicAgent], dict[str, CompleteAgent]]:
                 e,
             )
             continue
+        except Exception as e:
+            logger.warning(
+                "An unexpected exception occured while scanning %s: %s",
+                file.name,
+                e,
+            )
+            continue
 
-    return basic_agents, complete_agents
+    return basic_agents, complete_agents, agent_definitions
