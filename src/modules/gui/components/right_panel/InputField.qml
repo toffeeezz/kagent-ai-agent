@@ -13,6 +13,7 @@ CustomRect {
   readonly property int buttonSize: 40
   readonly property int minInputHeight: buttonSize + pad * 2    // 60: the button exactly fits at rest
   readonly property int maxInputHeight: 200
+  radius: 10
 
   Layout.fillWidth: true
   Layout.preferredHeight: Math.max(minInputHeight, Math.min(input.implicitHeight + pad * 2, maxInputHeight))
@@ -48,7 +49,10 @@ CustomRect {
         id: hover
         cursorShape: Qt.PointingHandCursor
       }
-      onClicked: controller.pickFiles()
+      onClicked: {
+        controller.pickFiles();
+        console.log("clicked");
+      }
     }
 
     ScrollView {
@@ -71,10 +75,9 @@ CustomRect {
         Keys.onPressed: event => {
           const isEnter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter;
           if (isEnter && !(event.modifiers & Qt.ShiftModifier)) {
-            root.attachmentEmbedded();
             event.accepted = true;
             if (text.trim().length > 0) {
-              app.chat.send(text);
+              controller.addMessage(text);
               clear();
             }
           }
