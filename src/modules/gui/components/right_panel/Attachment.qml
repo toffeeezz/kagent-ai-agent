@@ -1,3 +1,4 @@
+// [ame-chan] fixed: non-image attachment label now uses font.families (plural)
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -58,6 +59,7 @@ Item {
     Text {
       visible: !root.isImage
       text: root.name
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontSm
       width: image.width
       height: image.height

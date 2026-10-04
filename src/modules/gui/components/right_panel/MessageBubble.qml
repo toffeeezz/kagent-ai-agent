@@ -1,3 +1,5 @@
+// [ame-chan] fixed: message body uses font.families (plural); code uses font.families
+// with the Theme.fontMono list so JetBrains Mono/Cascadia/Consolas actually resolve.
 // [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -99,6 +101,7 @@ Item {
 
             TextEdit {
               text: blockLoader.modelData.body
+              font.family: Theme.fontFamily
               font.pixelSize: Theme.fontMd
               textFormat: TextEdit.MarkdownText
               color: root.fromUser ? Theme.primaryContainerOn : Theme.surfaceOn
@@ -123,6 +126,7 @@ Item {
                 y: 6
                 text: blockLoader.modelData.lang
                 color: Theme.textDimmed
+                font.family: Theme.fontMono
                 font.pixelSize: Theme.fontSm
               }
 
@@ -147,7 +151,7 @@ Item {
                 text: blockLoader.modelData.body
                 readOnly: true
                 selectByMouse: true
-                font.family: "monospace"
+                font.family: Theme.fontMono
                 color: Theme.textCode
                 wrapMode: TextEdit.WrapAnywhere
 
@@ -198,6 +202,7 @@ Item {
                 text: att.modelData.name
                 elide: Text.ElideMiddle
                 horizontalAlignment: Text.AlignHCenter
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSm
                 color: Theme.textMuted
               }

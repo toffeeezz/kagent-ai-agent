@@ -1,3 +1,4 @@
+// [ame-chan] fixed: input was on the bogus singular "font.family" token — now font.families
 // [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Dialogs
@@ -77,7 +78,8 @@ CustomRect {
         wrapMode: TextArea.Wrap
         textFormat: TextEdit.PlainText
         selectByMouse: true
-        font.family: "monospace"
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontMd
         background: null
 
         Keys.onPressed: event => {

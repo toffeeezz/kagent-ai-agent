@@ -1,3 +1,4 @@
+// [ame-chan] fixed: welcome/placeholder/thinking text use font.families (plural)
 // [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -16,6 +17,7 @@ CustomRect {
     id: welcomeText
 
     text: "Welcome " + controller.username + "\nOpen or create a session to get started"
+    font.family: Theme.fontFamily
     font.pixelSize: Theme.fontXl
     color: Theme.surfaceOn
     horizontalAlignment: Text.AlignHCenter
@@ -28,6 +30,7 @@ CustomRect {
 
   Text {
     text: "Say hi to " + controller.selectedAgent
+    font.family: Theme.fontFamily
     font.pixelSize: Theme.fontXl
     color: Theme.surfaceOn
     horizontalAlignment: Text.AlignHCenter
@@ -195,6 +198,7 @@ CustomRect {
 
         Text {
           text: controller.thinkingLabel || "Thinking\u2026"
+          font.family: Theme.fontFamily
           color: Theme.textDimmed
         }
       }

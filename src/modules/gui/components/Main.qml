@@ -1,3 +1,5 @@
+// [ame-chan] fixed: toast text was on font.family (singular) with a comma-joined
+// token, which Qt resolved to nothing — now font.families + a real list.
 // [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Controls
@@ -72,6 +74,7 @@ Window {
 
     contentItem: Text {
       id: label
+      font.family: Theme.fontFamily
       color: Theme.textPrimary
       wrapMode: Text.Wrap
       width: Math.min(implicitWidth, 400)

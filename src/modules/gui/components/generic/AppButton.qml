@@ -1,3 +1,5 @@
+// [ame-chan] fixed: button label fonts now use font.families (plural) so the
+// Theme list actually resolves instead of being treated as one bogus family.
 // [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -92,6 +94,7 @@ Button {
 
   contentItem: Text {
     text: root.text
+    font.family: Theme.fontFamily
     font.pixelSize: root.font.pixelSize > 0 ? root.font.pixelSize : Theme.fontMd
     color: root.fgColor
     horizontalAlignment: Text.AlignHCenter
