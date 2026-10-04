@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 
 import "../generic"
+import "../theme"
 
 Item {
   id: root
@@ -40,7 +41,7 @@ Item {
       target: body
       property: "scale"
       to: 0
-      duration: 150
+      duration: Theme.animNormal
       easing.type: Easing.InCubic
       onFinished: controller.attachmentModel.removeAt(root.index)
     }
@@ -50,25 +51,27 @@ Item {
 
       source: root.isImage ? root.url : ""
       visible: root.isImage
-      radius: 10
+      radius: Theme.radiusMd
       size: 70
     }
 
     Text {
       visible: !root.isImage
       text: root.name
-      font.pixelSize: 8
+      font.pixelSize: Theme.fontSm
       width: image.width
       height: image.height
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
     }
 
-    Button {
+    AppButton {
       id: removeBtn
+      variant: "tonal"
+      iconOnly: true
       text: "X"
-      implicitWidth: 20
-      implicitHeight: 20
+      implicitWidth: 24
+      implicitHeight: 24
       anchors.right: parent.right
       anchors.top: parent.top
       onClicked: {

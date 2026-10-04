@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 
 import "../generic"
+import "../theme"
 
 ListView {
   id: root
@@ -12,11 +13,11 @@ ListView {
   Layout.fillWidth: true
   Layout.preferredHeight: model.count > 0 ? 80 : 0
   clip: true
-  spacing: 10
+  spacing: Theme.spaceMd
 
   Behavior on Layout.preferredHeight {
     NumberAnimation {
-      duration: 100
+      duration: Theme.animFast
       easing.type: Easing.InOutCubic
     }
   }
