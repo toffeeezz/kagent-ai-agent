@@ -173,7 +173,10 @@ class Server:
             return completion
         except OpenAIError as e:
             logger.exception("LLM request failed: agent=%s", agent_name)
-            raise LLMRequestError(agent_name, str(e)) from e
+            body = getattr(e, "body", None)
+            err = body.get("error", body) if isinstance(body, dict) else None
+            detail = err.get("message") if isinstance(err, dict) else None
+            raise LLMRequestError(agent_name, detail or str(e)) from e
 
     async def _request_llm_streaming(
         self,
