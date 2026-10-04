@@ -1,3 +1,4 @@
+# [ame-chan] stripped comments
 from pygments.lexer import Lexer
 from pygments.lexers import get_lexer_by_name
 from pygments.style import Style
@@ -5,12 +6,18 @@ from pygments.styles import get_style_by_name
 from pygments.token import _TokenType
 from pygments.util import ClassNotFound
 from PyQt6.QtCore import QObject, pyqtSlot
-from PyQt6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor, QTextDocument
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+)
 from PyQt6.QtQuick import QQuickTextDocument
 
 
 def _utf16_len(s: str) -> int:
-    # Qt document offsets are UTF-16 code units; Python str indexes are code points
     return len(s.encode("utf-16-le")) // 2
 
 
@@ -39,6 +46,38 @@ class CodeHighlighter(QObject):
         self._formats[ttype] = fmt
         return fmt
 
+    @pyqtSlot(QQuickTextDocument, int, int)
+    def setBlockSpacing(
+        self, quick_doc: QQuickTextDocument, line_percent: int, paragraph_gap: int
+    ) -> None:
+        doc = quick_doc.textDocument()
+
+        cursor = QTextCursor(doc)
+        cursor.select(QTextCursor.SelectionType.Document)
+        fmt = QTextBlockFormat()
+        fmt.setLineHeight(
+            float(line_percent),
+            QTextBlockFormat.LineHeightTypes.ProportionalHeight.value,
+        )
+        fmt.setBottomMargin(float(paragraph_gap))
+        cursor.mergeBlockFormat(fmt)
+
+        tail = QTextBlockFormat()
+        tail.setBottomMargin(0.0)
+        QTextCursor(doc.lastBlock()).mergeBlockFormat(tail)
+
+    @pyqtSlot(QQuickTextDocument, int)
+    def setLineHeight(self, quick_doc: QQuickTextDocument, percent: int) -> None:
+        doc = quick_doc.textDocument()
+        cursor = QTextCursor(doc)
+        cursor.select(QTextCursor.SelectionType.Document)
+        fmt = QTextBlockFormat()
+        fmt.setLineHeight(
+            float(percent),
+            QTextBlockFormat.LineHeightTypes.ProportionalHeight.value,
+        )
+        cursor.mergeBlockFormat(fmt)
+
     @pyqtSlot(QQuickTextDocument, str)
     def attach(self, quick_doc: QQuickTextDocument, lang: str) -> None:
         doc: QTextDocument | None = quick_doc.textDocument()
@@ -46,12 +85,11 @@ class CodeHighlighter(QObject):
             return
 
         try:
-            # No stripping/newline fixing, so token offsets match the document exactly
             lexer: Lexer = get_lexer_by_name(
                 lang.strip().lower(), stripnl=False, ensurenl=False
             )
         except ClassNotFound:
-            return  # unknown language: stays plain monospace
+            return
 
         text: str = doc.toPlainText()
         cursor = QTextCursor(doc)
