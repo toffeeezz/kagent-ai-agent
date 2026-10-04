@@ -1,3 +1,10 @@
+// [ame-chan] fixed: fontFamily/fontMono were comma-joined strings fed to the
+// singular font.family, which Qt does NOT parse as a fallback list — it treated
+// the whole string as one nonexistent family name and silently fell back to the
+// system default, so no font change was ever visible. Now real string-lists
+// consumed via font.families (plural), which Qt does resolve in order.
+// Generic CSS names ("sans-serif"/"monospace") dropped — they aren't real Qt
+// families; Qt falls back to the platform default on its own.
 // [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 pragma Singleton
@@ -63,6 +70,12 @@ QtObject {
   readonly property int fontLg: 22
   readonly property int fontMd: 14
   readonly property int fontSm: 11
+
+  // [ame-chan] font families: ordered fallback lists, consumed via font.families.
+  // Installed-only — nothing is bundled, so if Inter/JetBrains Mono are absent
+  // these degrade to the OS faces below them.
+  readonly property var fontFamily: ["Inter", "Segoe UI Variable", "Segoe UI"]
+  readonly property var fontMono: ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas"]
 
   readonly property int radiusSm: 8
   readonly property int radiusMd: 12
