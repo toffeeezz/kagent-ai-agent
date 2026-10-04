@@ -26,7 +26,12 @@ class SessionsBackend(Protocol):
     def delete_session(self, session_id: int) -> None: ...
     def get_messages(self, session_id: int) -> list[MessageRow]: ...
     def add_message(
-        self, session_id: int, role: str, text: str, speaker_name: str
+        self,
+        session_id: int,
+        role: str,
+        text: str,
+        speaker_name: str,
+        attachments: Sequence[str] = (),
     ) -> MessageRow: ...
 
 
@@ -98,6 +103,13 @@ class MockSessionBackend:
         return self._database.get_messages(session_id)
 
     def add_message(
-        self, session_id: int, role: str, text: str, speaker_name: str
+        self,
+        session_id: int,
+        role: str,
+        text: str,
+        speaker_name: str,
+        attachments: Sequence[str] = (),
     ) -> MessageRow:
-        return self._database.add_message(session_id, role, text, speaker_name)
+        return self._database.add_message(
+            session_id, role, text, speaker_name, attachments
+        )

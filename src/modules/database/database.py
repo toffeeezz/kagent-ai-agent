@@ -1,58 +1,15 @@
 import atexit
 import datetime
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
-from typing import cast, final
-
-import sqlite_vec
+from typing import Any, final
 
 from modules.database.erros import DatabaseError
-from modules.database.models import MemoryRow, MessageRow, SessionRow
+from modules.database.models import MessageRow, SessionRow
 
 DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data/agent.db"
 
-TEST_SCHEMA = """
-PRAGMA foreign_keys = ON;   -- needed so deleting a session also deletes its messages
-
--- clean up earlier runs of this script
-DELETE FROM sessions WHERE agent_name IN ('Ame', 'Amadeus');
-
--- sessions
-INSERT INTO sessions (title, agent_name, created_at) VALUES
-  ('Planning the QML layout', 'Ame',      '2026-09-28 09:00:00'),
-  ('Memory design notes',     'Amadeus',  '2026-09-28 10:00:00');
-
--- messages for Ame
-INSERT INTO messages (session_id, speaker_name, role, text, created_at) VALUES
-  ((SELECT id FROM sessions WHERE agent_name = 'Ame'), 'John', 'user',
-   'I want a left panel with my agents and a chat area on the right.', '2026-09-28 09:01:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Ame'), 'Ame', 'assistant',
-   'Use a RowLayout: a fixed-width left panel and a chat area with Layout.fillWidth.', '2026-09-28 09:02:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Ame'), 'John', 'user',
-   'How do I stop long agent names from stretching the panel?', '2026-09-28 09:03:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Ame'), 'Ame', 'assistant',
-   'Set elide on the Text and give it Layout.fillWidth so the layout bounds its width.', '2026-09-28 09:04:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Ame'), 'John', 'user',
-   'That worked, thanks.', '2026-09-28 09:05:00');
-
--- messages for Amadeus
-INSERT INTO messages (session_id, speaker_name, role, text, created_at) VALUES
-  ((SELECT id FROM sessions WHERE agent_name = 'Amadeus'), 'John', 'user',
-   'Should memories be stored per agent or shared?', '2026-09-28 10:01:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Amadeus'), 'Amadeus', 'assistant',
-   'Per agent is simpler: each memory row carries an agent_name and searches filter on it.', '2026-09-28 10:02:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Amadeus'), 'John', 'user',
-   'And core memories?', '2026-09-28 10:03:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Amadeus'), 'Amadeus', 'assistant',
-   'Keep a separate table of promoted memory ids, so promoting and demoting never touches the memory itself.', '2026-09-28 10:04:00'),
-  ((SELECT id FROM sessions WHERE agent_name = 'Amadeus'), 'John', 'user',
-   'Got it, that keeps things clean.', '2026-09-28 10:05:00');
-
--- check the result
-SELECT s.agent_name, s.title, COUNT(m.id) AS messages
-FROM sessions s LEFT JOIN messages m ON m.session_id = s.id
-GROUP BY s.id;
-"""
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -63,15 +20,22 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE TABLE IF NOT EXISTS messages (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     speaker_name TEXT NOT NULL,
-    role       TEXT NOT NULL,
-    text       TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    role         TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS attachments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    path       TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
 """
 
 MESSAGE_TIME_FORMAT = "%b %d, %I:%M %p"
@@ -90,9 +54,10 @@ def _utc_to_local_12h(utc_text: str) -> str:
     return utc_time.astimezone().strftime(MESSAGE_TIME_FORMAT)
 
 
-def _to_message(row: dict[object, object]) -> MessageRow:
+def _to_message(row: dict[str, Any], attachments: Sequence[str] = ()) -> MessageRow:
     data = dict(row)
     data["created_at"] = _utc_to_local_12h(str(data["created_at"]))
+    data["attachments"] = tuple(attachments)
     return MessageRow.model_validate(data)
 
 
@@ -110,15 +75,11 @@ class Database:
         self.conn.close()
 
     # ---------- low-level helpers ----------
-    def _one(
-        self, sql: str, params: tuple[object, ...] = ()
-    ) -> dict[object, object] | None:
+    def _one(self, sql: str, params: tuple[object, ...] = ()) -> dict[str, Any] | None:
         row = self.conn.execute(sql, params).fetchone()
         return dict(row) if row else None
 
-    def _all(
-        self, sql: str, params: tuple[object, ...] = ()
-    ) -> list[dict[object, object]]:
+    def _all(self, sql: str, params: tuple[object, ...] = ()) -> list[dict[str, Any]]:
         return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
 
     # ---------- sessions ----------
@@ -154,16 +115,29 @@ class Database:
 
     # ---------- messages ----------
     def add_message(
-        self, session_id: int, role: str, text: str, speaker_name: str
+        self,
+        session_id: int,
+        role: str,
+        text: str,
+        speaker_name: str,
+        attachments: Sequence[str] = (),
     ) -> MessageRow:
-        cur = self.conn.execute(
-            "INSERT INTO messages (session_id, role, speaker_name, text) VALUES (?, ?, ?, ?)",
-            (session_id, role, speaker_name, text),
-        )
-        self.conn.commit()
-        if cur.lastrowid is None:
-            raise DatabaseError("INSERT query did not return a row ID")
-        message = self.get_message(cur.lastrowid)
+        # `with self.conn` commits on success and rolls back on an exception,
+        # so a message can never be saved without its attachments.
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO messages (session_id, role, speaker_name, text) VALUES (?, ?, ?, ?)",
+                (session_id, role, speaker_name, text),
+            )
+            message_id = cur.lastrowid
+            if message_id is None:
+                raise DatabaseError("INSERT query did not return a row ID")
+            if attachments:
+                _ = self.conn.executemany(
+                    "INSERT INTO attachments (message_id, path) VALUES (?, ?)",
+                    [(message_id, p) for p in attachments],
+                )
+        message = self.get_message(message_id)
         if message is None:
             raise DatabaseError("Could not read back the message that was just created")
         return message
@@ -172,11 +146,29 @@ class Database:
         rows = self._all(
             "SELECT * FROM messages WHERE session_id = ? ORDER BY id", (session_id,)
         )
-        return [_to_message(r) for r in rows]
+        # One query for all attachments in the session, grouped by message
+        grouped: dict[int, list[str]] = {}
+        for a in self._all(
+            """SELECT a.message_id, a.path FROM attachments a 
+            JOIN messages m ON m.id = a.message_id 
+            WHERE m.session_id = ? ORDER BY a.id""",
+            (session_id,),
+        ):
+            grouped.setdefault(a["message_id"], []).append(a["path"])
+        return [_to_message(r, grouped.get(r["id"], [])) for r in rows]
 
     def get_message(self, message_id: int) -> MessageRow | None:
         row = self._one("SELECT * FROM messages WHERE id = ?", (message_id,))
-        return _to_message(row) if row else None
+        if row is None:
+            return None
+        paths = [
+            a["path"]
+            for a in self._all(
+                "SELECT path FROM attachments WHERE message_id = ? ORDER BY id",
+                (message_id,),
+            )
+        ]
+        return _to_message(row, paths)
 
 
 DATABASE = Database()

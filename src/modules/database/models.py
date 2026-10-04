@@ -17,6 +17,7 @@ class MessageRow(BaseModel):
     text: str
     created_at: str
     speaker_name: str
+    attachments: tuple[str, ...] = ()
 
 
 class MemoryRow(BaseModel):
