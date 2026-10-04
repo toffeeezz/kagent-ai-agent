@@ -1,3 +1,5 @@
+// [ame-chan] fixed: section headers + New Session row now use font.families (plural)
+// [ame-chan] refactored: single-card left panel, outlineVariant dividers between sections, consistent left-aligned headers, rest-state chip on New Session
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -15,7 +17,20 @@ CustomRect {
     anchors.fill: parent
     spacing: 0
 
-    CustomRect {
+    Text {
+      text: "Agents"
+      font.family: Theme.fontFamily
+      font.pixelSize: Theme.fontMd
+      font.weight: Font.DemiBold
+      color: Theme.surfaceOn
+      Layout.fillWidth: true
+      Layout.leftMargin: Theme.spaceMd
+      Layout.topMargin: Theme.spaceLg
+      Layout.bottomMargin: Theme.spaceSm
+      horizontalAlignment: Text.AlignLeft
+    }
+
+    Item {
       id: agentMenu
 
       Layout.fillWidth: true
@@ -25,14 +40,6 @@ CustomRect {
         id: agentMenuColumn
 
         anchors.fill: parent
-
-        Text {
-          text: "Agents"
-          font.pixelSize: Theme.fontLg
-          color: Theme.surfaceOn
-          Layout.fillWidth: true
-          horizontalAlignment: Text.AlignHCenter
-        }
 
         ListView {
           Layout.fillHeight: true
@@ -49,6 +56,14 @@ CustomRect {
       }
     }
 
+    Rectangle {
+      Layout.fillWidth: true
+      Layout.preferredHeight: 1
+      Layout.leftMargin: Theme.spaceMd
+      Layout.rightMargin: Theme.spaceMd
+      color: Theme.outlineVariant
+    }
+
     ColumnLayout {
       id: sessionList
 
@@ -57,24 +72,40 @@ CustomRect {
 
       Text {
         text: "Sessions"
+        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontMd
+        font.weight: Font.DemiBold
         color: Theme.surfaceOn
         Layout.fillWidth: true
-        horizontalAlignment: Text.AlignHCenter
+        Layout.leftMargin: Theme.spaceMd
+        Layout.topMargin: Theme.spaceLg
+        Layout.bottomMargin: Theme.spaceSm
+        horizontalAlignment: Text.AlignLeft
       }
 
       CustomRect {
         id: newSessionBtn
 
-        readonly property int bulletSize: 12
+        // [ame-chan] fixed: "+" was a bare fontLg Text that overflowed the 16px content box and
+        // rode high vs. the label. Now it lives in a fixed 12px slot (same as the SessionRow
+        // bullet) with both children VCenter-aligned, so icon and label share a center line.
+        readonly property int iconSlot: 12
 
         Layout.fillWidth: true
-        Layout.preferredHeight: 40
+        Layout.preferredHeight: Theme.buttonHeight
         Layout.leftMargin: Theme.spaceMd
         Layout.rightMargin: Theme.spaceMd
+        Layout.bottomMargin: Theme.spaceSm
+        color: mouseArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
         radius: Theme.radiusMd
+        scale: mouseArea.pressed ? 0.98 : 1
         clip: true
-        scale: 0.9
+
+        Behavior on color {
+          ColorAnimation {
+            duration: Theme.animFast
+          }
+        }
 
         Behavior on scale {
           NumberAnimation {
@@ -86,20 +117,32 @@ CustomRect {
         RowLayout {
           anchors.fill: parent
           anchors.margins: Theme.spaceMd
-          spacing: 0
+          spacing: Theme.spaceMd
 
-          CustomRect {
-            Layout.preferredHeight: newSessionBtn.bulletSize
-            Layout.preferredWidth: newSessionBtn.bulletSize
-            radius: newSessionBtn.bulletSize
+          Item {
+            Layout.preferredWidth: newSessionBtn.iconSlot
+            Layout.preferredHeight: newSessionBtn.iconSlot
+            Layout.alignment: Qt.AlignVCenter
+
+            Text {
+              anchors.centerIn: parent
+              text: "+"
+              color: Theme.primary
+              font.family: Theme.fontFamily
+              font.pixelSize: Theme.fontMd
+            }
           }
 
           Text {
             text: "New Session"
             color: Theme.surfaceOn
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontMd
             elide: Text.ElideRight
             Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
+            Layout.alignment: Qt.AlignVCenter
+            horizontalAlignment: Text.AlignLeft
+            verticalAlignment: Text.AlignVCenter
           }
         }
 
@@ -109,10 +152,6 @@ CustomRect {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onPressed: newSessionBtn.scale = 0.8
-          onReleased: newSessionBtn.scale = 1
-          onEntered: newSessionBtn.scale = 1
-          onExited: newSessionBtn.scale = 0.9
           onClicked: controller.createSession()
         }
       }
@@ -134,11 +173,19 @@ CustomRect {
       }
     }
 
-    CustomRect {
+    Rectangle {
+      Layout.fillWidth: true
+      Layout.preferredHeight: 1
+      Layout.leftMargin: Theme.spaceMd
+      Layout.rightMargin: Theme.spaceMd
+      color: Theme.outlineVariant
+    }
+
+    Item {
       id: settingsBar
 
       Layout.fillWidth: true
-      Layout.preferredHeight: Theme.buttonHeight * 2 + Theme.spaceLg
+      Layout.preferredHeight: Theme.buttonHeight
     }
   }
 }
