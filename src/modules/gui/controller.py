@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from pathlib import Path
 
 from openai.types.chat import ChatCompletionMessageParam
 from PyQt6.QtCore import (
@@ -18,12 +19,20 @@ from modules.agents.events import (
     ToolCallFinished,
     ToolCallStarted,
 )
+from modules.agents.models import ImageSource, build_history
 from modules.backend import (
     AgentsBackend,
     MessageRow,
     SessionsBackend,
 )
-from modules.gui.models import AgentListModel, MessageListModel, SessionListModel
+from modules.errors import ProgramError
+from modules.gui.models import (
+    AgentListModel,
+    AttachmentItem,
+    AttachmentListModel,
+    MessageListModel,
+    SessionListModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +52,7 @@ class AppController(QObject):
     _agent_list_model: AgentListModel
     _session_list_model: SessionListModel
     _message_list_model: MessageListModel
+    _attachment_list_model: AttachmentListModel
     _dialog: QFileDialog
     _tasks: set[asyncio.Task[None]]
     _username: str
@@ -61,9 +71,10 @@ class AppController(QObject):
         self._agent_list_model = AgentListModel()
         self._session_list_model = SessionListModel()
         self._message_list_model = MessageListModel()
+        self._attachment_list_model = AttachmentListModel()
         self._dialog = QFileDialog()
         self._tasks = set()
-        self._username = "John"
+        self._username = "toffeezzz"
         for agent in agent_backend.list_agents():
             if agent.type == "basic":
                 continue
@@ -94,8 +105,13 @@ class AppController(QObject):
         dialog.setWindowTitle("Attach files")
         dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
         dialog.setNameFilter("Images (*.png *.jpg *.jpeg *.webp);;All files (*)")
+        _ = dialog.filesSelected.connect(self._on_files_selected)
         self._dialog = dialog
         dialog.open()
+
+    def _on_files_selected(self, paths: list[str]) -> None:
+        for path in paths:
+            self._attachment_list_model.add_path(path)
 
     @pyqtSlot()
     def createSession(self) -> None:
@@ -118,10 +134,11 @@ class AppController(QObject):
 
     @pyqtSlot(str)
     def addMessage(self, text: str) -> None:
-        if self._selected_session_id < 0:
+        if self._selected_session_id < 0 or text == "":
             logger.warning("Message failed: No session selected/started")
             return
 
+        pending_attachments: list[AttachmentItem] = self._attachment_list_model.items()
         pending = MessageRow(
             id=PENDING_MESSAGE_ID,
             session_id=self._selected_session_id,
@@ -131,53 +148,65 @@ class AppController(QObject):
             created_at=datetime.datetime.now(datetime.UTC).isoformat(
                 sep=" ", timespec="seconds"
             ),
+            attachments=tuple(a.path for a in pending_attachments),
         )
         self._message_list_model.append(pending)
-
-        task = asyncio.ensure_future(self._send(text))
+        self._attachment_list_model.clear()
+        task = asyncio.ensure_future(self._send(text, pending_attachments))
         self._tasks.add(task)  # keeping a reference so it isn't garbage collected
         task.add_done_callback(self._on_task_done)
 
-    async def _send(self, text: str) -> None:
+    async def _send(self, text: str, pending_attachments: list[AttachmentItem]) -> None:
         session_id = self._selected_session_id
         agent_name = self._selected_agent
         username = self._username
 
         message_rows = self._session_backend.get_messages(session_id)
-        messages: list[ChatCompletionMessageParam] = [
-            {"role": "user", "content": f"[User {row.speaker_name}]: {row.text}"}
-            if row.role == "user"
-            else {"role": "assistant", "content": row.text}
-            for row in message_rows
+        messages = await asyncio.to_thread(build_history, message_rows)
+
+        images: list[ImageSource] = [
+            Path(a.path) for a in pending_attachments if a.is_image
         ]
 
         user_saved = False
 
-        async for event in self._agent_backend.run_complete_agent(
-            agent_name, username, text, history=messages
-        ):
-            match event:
-                case GeneratingResponse():
-                    print("thinking")
-                case GenerationFinished(content=c):
-                    if not user_saved:
-                        _ = self._session_backend.add_message(
-                            session_id, "user", text, username
-                        )
-                        user_saved = True
-
-                    if c.strip():
-                        message_row = self._session_backend.add_message(
-                            session_id, "assistant", c, agent_name
-                        )
+        try:
+            async for event in self._agent_backend.run_complete_agent(
+                agent_name, username, text, history=messages, images=images
+            ):
+                match event:
+                    case GeneratingResponse():
+                        print("thinking")
+                    case GenerationFinished(content=c):
+                        if not user_saved:
+                            _ = self._session_backend.add_message(
+                                session_id,
+                                "user",
+                                text,
+                                username,
+                                attachments=[
+                                    a.path for a in pending_attachments
+                                ],  # everything, not just images
+                            )
+                            user_saved = True
+                        if c.strip():
+                            message_row = self._session_backend.add_message(
+                                session_id, "assistant", c, agent_name
+                            )
+                            if self._selected_session_id == session_id:
+                                self._message_list_model.append(message_row)
+                    case ToolCallStarted(name=n):
+                        ...
+                    case ToolCallFinished(ok=ok, summary=s):
+                        ...
+                    case RunError(message=m):
+                        logger.warning("Run failed, user message not saved: %s", m)
                         if self._selected_session_id == session_id:
-                            self._message_list_model.append(message_row)
-                case ToolCallStarted(name=n):
-                    ...
-                case ToolCallFinished(ok=ok, summary=s):
-                    ...
-                case RunError(message=m):
-                    logger.warning("Run failed, user message not saved: %s", m)
+                            self._attachment_list_model.reset_to(pending_attachments)
+        except Exception:
+            if self._selected_session_id == session_id:
+                self._attachment_list_model.reset_to(pending_attachments)
+            logger.exception("An unexpected ProgramError occured")
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
@@ -210,3 +239,7 @@ class AppController(QObject):
     @pyqtProperty(QObject, constant=True)
     def messageModel(self) -> QObject:
         return self._message_list_model
+
+    @pyqtProperty(QObject, constant=True)
+    def attachmentModel(self) -> QObject:
+        return self._attachment_list_model
