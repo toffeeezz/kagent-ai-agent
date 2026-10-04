@@ -1,8 +1,10 @@
+// [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import "../generic"
+import "../theme"
 
 Item {
   id: root
@@ -12,6 +14,8 @@ Item {
   required property string role
   required property var attachments
   readonly property bool fromUser: role === "user"
+  readonly property real toX: fromUser ? width - bubble.width : 0
+  readonly property real fromX: fromUser ? width : -bubble.width - 20
 
   property bool shown: false
   property bool animateIn: true
@@ -53,15 +57,16 @@ Item {
     width: Math.min(400, root.width * 0.75)
     height: content.implicitHeight + 16
 
-    x: root.shown ? (root.fromUser ? root.width - width : 0) : (root.fromUser ? root.width : -width)
+    x: root.shown ? root.toX : root.fromX
 
-    radius: 10
+    color: root.fromUser ? Theme.primaryContainer : Theme.surfaceContainerHigh
+    radius: Theme.radiusLg
 
     Behavior on x {
       enabled: root.animateIn
       SequentialAnimation {
         PauseAnimation {
-          duration: root.staggerDelay // Uses our fixed snapshot delay
+          duration: root.staggerDelay
         }
 
         SpringAnimation {
@@ -76,8 +81,8 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
-      anchors.margins: 8
-      spacing: 8
+      anchors.margins: Theme.spaceSm
+      spacing: Theme.spaceSm
 
       Repeater {
         model: root.blocks
@@ -94,11 +99,14 @@ Item {
 
             TextEdit {
               text: blockLoader.modelData.body
+              font.pixelSize: Theme.fontMd
               textFormat: TextEdit.MarkdownText
+              color: root.fromUser ? Theme.primaryContainerOn : Theme.surfaceOn
               readOnly: true
               selectByMouse: true
               wrapMode: TextEdit.Wrap
               onLinkActivated: link => Qt.openUrlExternally(link)
+              Component.onCompleted: highlighter.setBlockSpacing(textDocument, 100, 25)
             }
           }
 
@@ -106,22 +114,23 @@ Item {
             id: codeBlock
 
             Rectangle {
-              color: "#1e1e1e"
-              radius: 6
+              color: Theme.bgCode
+              radius: Theme.radiusMd
               implicitHeight: codeEdit.y + codeEdit.implicitHeight + 8
 
               Text {
                 x: 8
                 y: 6
                 text: blockLoader.modelData.lang
-                color: "#888888"
-                font.pixelSize: 11
+                color: Theme.textDimmed
+                font.pixelSize: Theme.fontSm
               }
 
-              Button {
+              AppButton {
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 4
+                anchors.margins: Theme.spaceXs
+                variant: "text"
                 text: "Copy"
                 onClicked: {
                   codeEdit.selectAll();
@@ -139,10 +148,13 @@ Item {
                 readOnly: true
                 selectByMouse: true
                 font.family: "monospace"
-                color: "#d4d4d4"
+                color: Theme.textCode
                 wrapMode: TextEdit.WrapAnywhere
 
-                Component.onCompleted: highlighter.attach(textDocument, blockLoader.modelData.lang)
+                Component.onCompleted: {
+                  highlighter.attach(textDocument, blockLoader.modelData.lang);
+                  highlighter.setBlockSpacing(textDocument, 100, 5);
+                }
               }
             }
           }
@@ -151,7 +163,7 @@ Item {
 
       Flow {
         width: content.width
-        spacing: 6
+        spacing: Theme.spaceXs
         visible: root.attachments.length > 0
 
         Repeater {
@@ -176,8 +188,8 @@ Item {
 
             Rectangle {
               anchors.fill: parent
-              radius: 6
-              color: "#33000000"
+              radius: Theme.radiusSm
+              color: Theme.bgAttachmentFallback
               visible: !att.modelData.isImage || thumb.status === Image.Error
 
               Text {
@@ -186,7 +198,8 @@ Item {
                 text: att.modelData.name
                 elide: Text.ElideMiddle
                 horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSm
+                color: Theme.textMuted
               }
             }
           }
@@ -200,7 +213,7 @@ Item {
     root.animateIn = view ? view.revealing : false;
 
     if (root.animateIn)
-      root.staggerDelay = Math.max(0, ((view.count - 1) - root.index) * 100);
+      root.staggerDelay = Math.max(0, ((view.count - 1) - root.index) * view.staggerStep);
 
     shown = true;
   }

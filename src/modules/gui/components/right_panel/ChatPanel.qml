@@ -1,8 +1,10 @@
+// [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import "../generic"
+import "../theme"
 
 CustomRect {
   id: root
@@ -14,7 +16,8 @@ CustomRect {
     id: welcomeText
 
     text: "Welcome " + controller.username + "\nOpen or create a session to get started"
-    font.pixelSize: 30
+    font.pixelSize: Theme.fontXl
+    color: Theme.surfaceOn
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
     width: root.width
@@ -25,7 +28,8 @@ CustomRect {
 
   Text {
     text: "Say hi to " + controller.selectedAgent
-    font.pixelSize: 30
+    font.pixelSize: Theme.fontXl
+    color: Theme.surfaceOn
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
     width: root.width
@@ -38,25 +42,43 @@ CustomRect {
     id: list
 
     anchors.fill: parent
-    anchors.leftMargin: 12
-    anchors.rightMargin: 12
+    leftMargin: Theme.spaceMd
+    rightMargin: Theme.spaceMd
     clip: true
-    spacing: 8
+    spacing: Theme.spaceSm
     boundsBehavior: Flickable.StopAtBounds
     model: controller.messageModel
 
     displayMarginBeginning: 4000
     displayMarginEnd: 4000
 
-    topMargin: 16
-    bottomMargin: 16
+    topMargin: Theme.spaceLg
+    bottomMargin: Theme.spaceLg
 
     property bool stickToEnd: true
     property bool revealing: false
+    readonly property int staggerStep: 25
+    readonly property int revealDelay: 100
     readonly property bool userInteracting: vbar.pressed || dragging || flicking || moving
 
     ScrollBar.vertical: ScrollBar {
       id: vbar
+
+      background: null
+
+      contentItem: Rectangle {
+        implicitWidth: 6
+        implicitHeight: 40
+        radius: width / 2
+        color: Theme.outline
+        opacity: vbar.pressed ? 0.8 : (vbar.hovered ? 0.65 : 0.5)
+
+        Behavior on opacity {
+          NumberAnimation {
+            duration: 100
+          }
+        }
+      }
 
       onPressedChanged: {
         if (pressed)
@@ -95,7 +117,7 @@ CustomRect {
 
     Timer {
       id: revealTimer
-      interval: 400
+      interval: list.revealDelay
       onTriggered: list.revealing = false
     }
 
@@ -134,7 +156,7 @@ CustomRect {
 
       Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.spaceXs
 
         Repeater {
           model: 3
@@ -145,14 +167,14 @@ CustomRect {
 
             width: 8
             height: 8
-            radius: 4
-            color: "gray"
+            radius: Theme.radiusSm - 4
+            color: Theme.textDimmed
 
             SequentialAnimation on opacity {
               running: thinkingFooter.active
               loops: Animation.Infinite
               PauseAnimation {
-                duration: dot.index * 150
+                duration: dot.index * Theme.animNormal
               }
               NumberAnimation {
                 from: 0.25
@@ -165,15 +187,15 @@ CustomRect {
                 duration: 350
               }
               PauseAnimation {
-                duration: (2 - dot.index) * 150
+                duration: (2 - dot.index) * Theme.animNormal
               }
             }
           }
         }
 
         Text {
-          text: controller.thinkingLabel || "Thinking…"
-          color: "gray"
+          text: controller.thinkingLabel || "Thinking\u2026"
+          color: Theme.textDimmed
         }
       }
     }

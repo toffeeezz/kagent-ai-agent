@@ -1,3 +1,4 @@
+// [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Dialogs
 import QtQuick.Layouts
@@ -5,15 +6,16 @@ import QtQuick.Controls
 import QtCore
 
 import "../generic"
+import "../theme"
 
 CustomRect {
   id: root
 
   readonly property int pad: 10
   readonly property int buttonSize: 40
-  readonly property int minInputHeight: buttonSize + pad * 2    // 60: the button exactly fits at rest
+  readonly property int minInputHeight: buttonSize + pad * 2
   readonly property int maxInputHeight: 200
-  radius: 10
+  radius: Theme.radiusMd
 
   Layout.fillWidth: true
   Layout.preferredHeight: Math.max(minInputHeight, Math.min(input.implicitHeight + pad * 2, maxInputHeight))
@@ -38,30 +40,22 @@ CustomRect {
     id: inputRow
     anchors.fill: parent
     anchors.margins: root.pad
-    spacing: 8
+    spacing: Theme.spaceSm
 
-    Button {
+    AppButton {
       id: uploadBtn
+      variant: "text"
+      iconOnly: true
       text: "+"
-      font.pixelSize: 30
-      Layout.preferredWidth: root.buttonSize
-      Layout.preferredHeight: root.buttonSize
-      Layout.alignment: Qt.AlignBottom
-      background: null
 
-      rotation: hover.hovered ? -90 : 0
+      rotation: hovered ? -90 : 0
       transformOrigin: Item.Center
 
       Behavior on rotation {
         NumberAnimation {
-          duration: 150
+          duration: Theme.animNormal
           easing.type: Easing.OutCubic
         }
-      }
-
-      HoverHandler {
-        id: hover
-        cursorShape: Qt.PointingHandCursor
       }
 
       onClicked: picker.open()
@@ -78,6 +72,8 @@ CustomRect {
         height: Math.max(implicitHeight, scroll.availableHeight)
         verticalAlignment: Text.AlignVCenter
         placeholderText: "Message..."
+        color: Theme.surfaceOn
+        placeholderTextColor: Theme.textMuted
         wrapMode: TextArea.Wrap
         textFormat: TextEdit.PlainText
         selectByMouse: true
@@ -98,7 +94,6 @@ CustomRect {
           target: controller
 
           function onRestoreInput(text) {
-            // Don't clobber anything the user has already started typing
             if (input.text === "")
               input.text = text;
             input.forceActiveFocus();
@@ -106,22 +101,14 @@ CustomRect {
         }
       }
     }
-    Button {
+
+    AppButton {
       id: sendBtn
-      text: controller.isGenerating ? "■" : "➤"
-      font.pixelSize: 22
-      Layout.preferredWidth: root.buttonSize
-      Layout.preferredHeight: root.buttonSize
-      Layout.alignment: Qt.AlignBottom
-      background: null
+      variant: "filled"
+      iconOnly: true
+      text: controller.isGenerating ? "\u25a0" : "\u27a4"
 
-      // Dim the send arrow when there's nothing to send; Stop is always active
       enabled: controller.isGenerating || input.text.trim().length > 0
-      opacity: enabled ? 1 : 0.4
-
-      HoverHandler {
-        cursorShape: Qt.PointingHandCursor
-      }
 
       onClicked: {
         if (controller.isGenerating)
