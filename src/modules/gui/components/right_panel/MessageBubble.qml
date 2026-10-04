@@ -6,6 +6,8 @@ import "../generic"
 
 Item {
   id: root
+
+  required property int index
   required property string text
   required property string role
   required property var attachments
@@ -13,6 +15,8 @@ Item {
 
   property bool shown: false
   property bool animateIn: true
+
+  property int staggerDelay: 0
 
   readonly property var blocks: {
     const out = [];
@@ -55,9 +59,15 @@ Item {
 
     Behavior on x {
       enabled: root.animateIn
-      SpringAnimation {
-        spring: 3
-        damping: 0.2
+      SequentialAnimation {
+        PauseAnimation {
+          duration: root.staggerDelay // Uses our fixed snapshot delay
+        }
+
+        SpringAnimation {
+          spring: 3
+          damping: 0.2
+        }
       }
     }
 
@@ -139,7 +149,6 @@ Item {
         }
       }
 
-      // Attachments (images as thumbnails, other files as a name tile)
       Flow {
         width: content.width
         spacing: 6
@@ -165,7 +174,6 @@ Item {
               sourceSize.width: 160
             }
 
-            // Non-images, or images whose file is gone
             Rectangle {
               anchors.fill: parent
               radius: 6
@@ -188,6 +196,12 @@ Item {
   }
 
   Component.onCompleted: {
+    const view = ListView.view;
+    root.animateIn = view ? view.revealing : false;
+
+    if (root.animateIn)
+      root.staggerDelay = Math.max(0, ((view.count - 1) - root.index) * 100);
+
     shown = true;
   }
 }
