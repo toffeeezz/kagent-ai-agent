@@ -31,6 +31,7 @@ from modules.agents.events import (
     ToolCallFinished,
     ToolCallStarted,
 )
+from modules.database.models import MessageRow
 from modules.server.models import LLMParams, LLMPayload, LLMResponse
 from modules.server.server import Server
 from modules.toolkits.errors import ToolExecutionError
@@ -45,6 +46,39 @@ Detail = Literal["auto", "low", "high"]
 RUN_ERROR_TOOL = "run_error"
 
 SAY_LOG_LIMIT = 1000
+
+
+MAX_HISTORY_IMAGES = 4  # newest N images are re-sent; older ones become a text note
+
+
+def build_history(rows: Sequence[MessageRow]) -> list[ChatCompletionMessageParam]:
+    budget = MAX_HISTORY_IMAGES
+    out: list[ChatCompletionMessageParam] = []
+
+    for row in reversed(rows):
+        if row.role != "user":
+            out.append({"role": "assistant", "content": row.text})
+            continue
+
+        send: list[ImageSource] = []
+        omitted: list[str] = []
+        for p in map(Path, row.attachments):
+            if not (mimetypes.guess_type(p.name)[0] or "").startswith("image/"):
+                continue
+            if budget > 0 and p.is_file():
+                send.append(p)
+                budget -= 1
+            else:
+                omitted.append(p.name)
+
+        text = row.text
+        if omitted:
+            text += f"\n\n[attached, not shown: {', '.join(omitted)}]"
+
+        out.append(_tagged_user_message(row.speaker_name, text, send))
+
+    out.reverse()
+    return out
 
 
 def image_part(
@@ -76,6 +110,15 @@ def _preview(text: str | None, limit: int = 200) -> str:
     )
 
 
+def _count_images(messages: Sequence[ChatCompletionMessageParam]) -> int:
+    n = 0
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list):
+            n += sum(1 for part in content if part.get("type") == "image_url")
+    return n
+
+
 def _log_say(speaker: str, text: str, images: int = 0) -> None:
     """Log something a user or the agent said. Full text at DEBUG."""
     logger.info(
@@ -87,10 +130,15 @@ def _log_say(speaker: str, text: str, images: int = 0) -> None:
     logger.debug("Say (full): [%s] %s", speaker, text)
 
 
+def _attachment_note(images: Sequence[ImageSource]) -> str:
+    names = [i.name for i in images if isinstance(i, Path)]
+    return f"\n\n[attached: {', '.join(names)}]" if names else ""
+
+
 def _user_message(
     text: str, images: Sequence[ImageSource] = ()
 ) -> ChatCompletionUserMessageParam:
-    """Plain user message, no speaker tag."""
+    text = text + _attachment_note(images)
     if not images:
         return {"role": "user", "content": text}
     parts: list[ChatCompletionContentPartParam] = [{"type": "text", "text": text}]
@@ -301,19 +349,20 @@ class CompleteAgent(BaseAgent):
                     len(pending),
                     self.name,
                 )
-
+        history_images = _count_images(self._messages)
+        logger.info(
+            "Run start: agent=%s model=%s history=%d history_images=%d images=%d max_loops=%d",
+            self.name,
+            self._language_model,
+            len(self._messages),
+            history_images,
+            len(images or []),
+            self._max_loops,
+        )
         user_message = self._build_user_message(input, username, images)
         self._messages.append(user_message)
         _log_say(f"User {username}", input, len(images or []))
 
-        logger.info(
-            "Run start: agent=%s model=%s history=%d images=%d max_loops=%d",
-            self.name,
-            self._language_model,
-            len(self._messages),
-            len(images or []),
-            self._max_loops,
-        )
         total_cost = 0.0
         finished = False
 
