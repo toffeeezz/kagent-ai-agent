@@ -9,8 +9,10 @@ from modules.agents.models import AgentDefinition, BasicAgent, CompleteAgent
 from modules.errors import ProgramError
 from modules.toolkits.registry import REGISTRY
 
-AGENT_DEFINITION_DIR = Path(__file__).resolve().parent / "definitions"
-GLOBAL_SYSTEM_PROMPT = Path(__file__).resolve().parent / "GLOBAL_SYSTEM_PROMPT.md"
+AGENTS_DIR = Path(__file__).resolve().parent
+AGENT_DEFINITION_DIR = AGENTS_DIR / "definitions"
+GLOBAL_SYSTEM_PROMPT = AGENTS_DIR / "GLOBAL_SYSTEM_PROMPT.md"
+AGENT_AVATAR_DIR = AGENTS_DIR / "avatars"
 
 logger = logging.getLogger(__name__)
 

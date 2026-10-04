@@ -1,6 +1,6 @@
 ---
 name: Ame
-image_path: "text.png"
+image_path: "ame.jpg"
 type: complete
 language_model: deepseek/deepseek-v4.1-flash
 max_loop: 40

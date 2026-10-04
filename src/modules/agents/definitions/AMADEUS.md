@@ -1,6 +1,6 @@
 ---
 name: Amadeus
-image_path: "text.png"
+image_path: "amadeus.png"
 type: complete
 language_model: deepseek/deepseek-v4-flash
 max_loop: 40
