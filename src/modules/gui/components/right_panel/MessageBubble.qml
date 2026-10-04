@@ -16,7 +16,7 @@ Item {
   required property string role
   required property var attachments
   readonly property bool fromUser: role === "user"
-  readonly property real toX: fromUser ? width - bubble.width : 0
+  readonly property real toX: fromUser ? width - bubble.width - 20 : 0
   readonly property real fromX: fromUser ? width : -bubble.width - 20
 
   property bool shown: false
