@@ -109,6 +109,12 @@ class AppController(QObject):
         sessions = self._session_backend.list_sessions(self._selected_agent)
         self._session_list_model.reset_to(sessions)
 
+    @pyqtSlot(str)
+    def renameSession(self, title: str) -> None:
+        session_id = self._selected_session_id
+        self._session_list_model.rename(session_id, title)
+        self._session_backend.rename_session(title, session_id)
+
     # ---------- messaging ----------
     @pyqtSlot(str)
     def addMessage(self, text: str) -> None:

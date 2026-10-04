@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS messages (
     speaker_name TEXT NOT NULL,
     role         TEXT NOT NULL,
     text         TEXT NOT NULL,
+    trace        TEXT,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -113,6 +114,14 @@ class Database:
         if cur.rowcount == 0:
             raise DatabaseError(f"No session found with id {session_id}")
 
+    def rename_session(self, title: str, session_id: int) -> None:
+        cur = self.conn.execute(
+            "UPDATE sessions SET title = ? WHERE id = ?", (title, session_id)
+        )
+        self.conn.commit()
+        if cur.rowcount == 0:
+            raise DatabaseError(f"No session found with id {session_id}")
+
     # ---------- messages ----------
     def add_message(
         self,
@@ -122,7 +131,6 @@ class Database:
         speaker_name: str,
         attachments: Sequence[str] = (),
     ) -> MessageRow:
-        # so a message can never be saved without its attachments.
         with self.conn:
             cur = self.conn.execute(
                 "INSERT INTO messages (session_id, role, speaker_name, text) VALUES (?, ?, ?, ?)",
@@ -145,7 +153,6 @@ class Database:
         rows = self._all(
             "SELECT * FROM messages WHERE session_id = ? ORDER BY id", (session_id,)
         )
-        # One query for all attachments in the session, grouped by message
         grouped: dict[int, list[str]] = {}
         for a in self._all(
             """SELECT a.message_id, a.path FROM attachments a 

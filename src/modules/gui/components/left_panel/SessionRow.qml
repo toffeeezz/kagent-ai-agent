@@ -201,7 +201,7 @@ CustomRect {
     onAccepted: {
       const name = renameField.text.trim();
       if (name.length > 0 && name !== root.title)
-        controller.renameSession(root.sessionId, name);
+        controller.renameSession(name);
     }
 
     TextField {

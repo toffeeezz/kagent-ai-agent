@@ -19,6 +19,7 @@ kits_path = Path(__file__).resolve().parent / "kits"
 
 
 def _collect_tool_funcs(tools_module: ModuleType) -> list[Callable[..., object]]:
+    """Collects all the written functions within the module, skipping any imported functions, missing return annotations, or types that are not ToolResult"""
     funcs: list[Callable[..., object]] = []
 
     for name, func in inspect.getmembers(tools_module, inspect.isfunction):
@@ -44,6 +45,7 @@ def _collect_tool_funcs(tools_module: ModuleType) -> list[Callable[..., object]]
 
 
 def scan_toolkit_dir() -> list[ToolKit]:
+    """Scans each directory in kits_path, then retrieves the metadata from the SKILL.md and module from tools.py for toolkit creation"""
     if not kits_path.exists():
         raise ProgramError(f"{kits_path} could not be found. Unable to build toolkits")
 

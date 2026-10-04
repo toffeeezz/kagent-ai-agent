@@ -23,6 +23,7 @@ from modules.server.server import Server
 class SessionsBackend(Protocol):
     def list_sessions(self, agent_name: str) -> list[SessionRow]: ...
     def create_session(self, title: str, agent_name: str) -> SessionRow: ...
+    def rename_session(self, title: str, session_id: int) -> None: ...
     def delete_session(self, session_id: int) -> None: ...
     def get_messages(self, session_id: int) -> list[MessageRow]: ...
     def add_message(
@@ -101,6 +102,9 @@ class MockSessionBackend:
 
     def get_messages(self, session_id: int) -> list[MessageRow]:
         return self._database.get_messages(session_id)
+
+    def rename_session(self, title: str, session_id: int) -> None:
+        self._database.rename_session(title, session_id)
 
     def add_message(
         self,

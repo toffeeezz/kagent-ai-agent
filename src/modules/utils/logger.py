@@ -6,7 +6,6 @@ from rich.logging import RichHandler
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-# Words Rich highlights in console log lines, so the important events stand out.
 CONSOLE_KEYWORDS = [
     "Say:",
     "Tool call:",
@@ -25,7 +24,7 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
     log_dir.mkdir(exist_ok=True, parents=True)
 
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)  # let handlers filter; root stays permissive
+    root.setLevel(logging.DEBUG)
 
     # Console: colored, wrapped, readable. Rich draws the time and level
     # columns itself, so the formatter only adds the logger name.
@@ -40,7 +39,6 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
         # read as markup styles, so markup must stay off.
         markup=False,
         rich_tracebacks=True,
-        # Locals can hold API keys and huge prompts, so keep them out of output.
         tracebacks_show_locals=False,
         keywords=CONSOLE_KEYWORDS,
     )
@@ -66,3 +64,4 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
     # Quiet down noisy third-party libs
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
+

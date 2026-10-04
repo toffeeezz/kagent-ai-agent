@@ -7,6 +7,7 @@ from modules.toolkits.models import Tool, ToolBlueprint, ToolKit
 
 
 def build_tool(kit_name: str, blueprint: ToolBlueprint) -> Tool:
+    """Returns a Tool class that holds the schema, description, and the live object function of the tool"""
     func = blueprint.func
     ignore = set(blueprint.params_to_ignore)
 
@@ -16,6 +17,8 @@ def build_tool(kit_name: str, blueprint: ToolBlueprint) -> Tool:
     properties: dict[str, object] = {}
     required: list[str] = []
 
+    # Checks each parameter for the function to check required/optional params
+    # Skips self and cls named params
     for name, param in sig.parameters.items():
         if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
             continue
@@ -56,6 +59,7 @@ def build_toolkit(
     blueprints: list[ToolBlueprint],
     core: bool = False,
 ) -> ToolKit:
+    """Builds a toolkit using the given blueprints"""
     tools = {bp.func.__name__: build_tool(name, bp) for bp in blueprints}
     return ToolKit(
         name=name, desc=desc, tools=tools, instructions=instructions, core=core

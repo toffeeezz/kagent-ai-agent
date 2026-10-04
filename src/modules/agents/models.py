@@ -43,18 +43,19 @@ logger = logging.getLogger(__name__)
 ImageSource = str | Path | bytes
 Detail = Literal["auto", "low", "high"]
 
-RUN_ERROR_TOOL = "run_error"
-
-SAY_LOG_LIMIT = 1000
-
-
+RUN_ERROR_TOOL = (
+    "run_error"  # a dummy tool for error messages when a crash happens mid run
+)
+SAY_LOG_LIMIT = 1000  # max chars to show for the logs of user inputs
 MAX_HISTORY_IMAGES = 4  # newest N images are re-sent; older ones become a text note
 
 
 def build_history(rows: Sequence[MessageRow]) -> list[ChatCompletionMessageParam]:
+    """A helper function for building the optional history parameter"""
     budget = MAX_HISTORY_IMAGES
     out: list[ChatCompletionMessageParam] = []
 
+    # Reverses the rows to prioritize the latest images
     for row in reversed(rows):
         if row.role != "user":
             out.append({"role": "assistant", "content": row.text})
@@ -62,6 +63,9 @@ def build_history(rows: Sequence[MessageRow]) -> list[ChatCompletionMessageParam
 
         send: list[ImageSource] = []
         omitted: list[str] = []
+
+        # Iterates each attachments and skips non-image types.
+        # The remaining ommited images gets turned into an attached note
         for p in map(Path, row.attachments):
             if not (mimetypes.guess_type(p.name)[0] or "").startswith("image/"):
                 continue
@@ -86,6 +90,7 @@ def image_part(
     mime: str = "image/png",
     detail: Detail | None = None,
 ) -> ChatCompletionContentPartImageParam:
+    """Automatically encodes the image sources into base64. Accepts str | Path | bytes for future compatibility"""
     if isinstance(source, Path):
         mime = mimetypes.guess_type(source.name)[0] or mime
         url = f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode()}"
@@ -338,6 +343,8 @@ class CompleteAgent(BaseAgent):
         On failure or cancellation the error is recorded in history and
         re-raised.
         """
+
+        # Loads a history if provided
         if history is not None:
             self._messages = [
                 self._messages[0],
@@ -367,6 +374,8 @@ class CompleteAgent(BaseAgent):
         finished = False
 
         try:
+            # Runs a loop that stops when the model responded with no tool calls.
+            # Generation failures don't leave unanswered tool call messages
             for loop in range(1, self._max_loops + 1):
                 payload = self._build_payload(user_message, tool_choice)
                 logger.info(
@@ -382,7 +391,6 @@ class CompleteAgent(BaseAgent):
                 response = await server.send_request_llm(payload)
                 self._messages.append(self._to_assistant_param(response))
                 total_cost += response.total_cost
-
                 tool_names = [
                     tc.function.name
                     for tc in response.tool_calls
@@ -418,7 +426,7 @@ class CompleteAgent(BaseAgent):
                     yield response
                     return
 
-                yield response  # show the text before the tools run
+                yield response
                 async for event in self._run_tools(response):
                     yield event
 
@@ -499,6 +507,7 @@ class CompleteAgent(BaseAgent):
         return cast(dict[str, object], parsed)
 
     async def _run_tools(self, response: LLMResponse) -> AsyncIterator[AgentEvent]:
+        """Runs each tool call sequentiall and skips non-function type tool calls"""
         for tc in response.tool_calls:
             if tc.type != "function":
                 logger.warning(
