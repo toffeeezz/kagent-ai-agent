@@ -34,6 +34,7 @@ def _build_agent(
             params=definition.params,
             registry=REGISTRY,
             system_prompt=f"{GLOBAL_SYSTEM_PROMPT.read_text()}\n{system_prompt}",
+            max_loops=definition.max_loop if definition.max_loop else 40,
         )
 
 
@@ -61,7 +62,7 @@ def scan_agent_dir() -> tuple[
     complete_agents: dict[str, CompleteAgent] = {}
     agent_definitions: list[AgentDefinition] = []
 
-    for file in AGENT_DEFINITION_DIR.iterdir():
+    for file in sorted(AGENT_DEFINITION_DIR.iterdir(), key=lambda p: p.name.lower()):
         print(file.name)
         if not file.is_file():
             logger.warning("Ignoring a non-file in the directoy: %s", file.name)
