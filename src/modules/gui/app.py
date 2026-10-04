@@ -21,11 +21,11 @@ COMPONENTS_DIR = Path(__file__).resolve().parent / "components"
 
 _ = load_dotenv()
 
-
 setup_logging()
 
 
 def main() -> None:
+    _ = os.environ.setdefault("QT_QPA_PLATFORMTHEME", "xdgdesktopportal")
     app = QApplication(sys.argv)
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
