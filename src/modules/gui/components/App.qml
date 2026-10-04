@@ -1,13 +1,23 @@
+// [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Layouts
 
 import "left_panel"
 import "right_panel"
 import "generic"
+import "theme"
 
-RowLayout {
-  spacing: 0
+Item {
+  anchors.margins: Theme.panelGap
 
-  LeftPanel {}
-  RightPanel {}
+  RowLayout {
+    anchors.fill: parent
+    spacing: Theme.panelGap
+
+    LeftPanel {}
+    RightPanel {
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+    }
+  }
 }

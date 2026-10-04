@@ -1,12 +1,15 @@
-// qml/Main.qml
+// [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Controls
+import "theme"
 
 Window {
   visible: true
   width: 1200
   height: 800
   title: "KAgent"
+
+  color: Theme.background
 
   Loader {
     id: ui
@@ -27,16 +30,16 @@ Window {
     id: toast
 
     property alias text: label.text
-    property color accent: "#c0392b"
+    property color accent: Theme.accentDefault
 
     parent: Overlay.overlay
     x: (parent.width - width) / 2
     y: 16
-    padding: 12
+    padding: Theme.spaceMd
 
     modal: false
     focus: false
-    closePolicy: Popup.NoAutoClose   // the timer closes it, not outside clicks
+    closePolicy: Popup.NoAutoClose
 
     enter: Transition {
       NumberAnimation {
@@ -57,19 +60,19 @@ Window {
       NumberAnimation {
         property: "opacity"
         to: 0
-        duration: 150
+        duration: Theme.animNormal
       }
     }
 
     background: Rectangle {
-      radius: 8
-      color: "#2a2a2a"
+      radius: Theme.radiusSm
+      color: Theme.bgToast
       border.color: toast.accent
     }
 
     contentItem: Text {
       id: label
-      color: "white"
+      color: Theme.textPrimary
       wrapMode: Text.Wrap
       width: Math.min(implicitWidth, 400)
     }
@@ -82,7 +85,7 @@ Window {
 
     function show(message, color) {
       text = message;
-      accent = color !== undefined ? color : "#c0392b";
+      accent = color === "green" ? Theme.accentGreen : color !== undefined ? color : Theme.accentDefault;
       open();
       hideTimer.restart();
     }
