@@ -3,7 +3,7 @@ name: Amadeus
 image_path: "amadeus.png"
 type: complete
 language_model: deepseek/deepseek-v4-flash
-max_loop: 40
+max_loop: 80
 params:
   temperature: 0.8
   reasoning_effort: high
