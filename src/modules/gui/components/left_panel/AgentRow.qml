@@ -27,7 +27,7 @@ CustomRect {
     anchors.fill: parent
     anchors.margins: 10
 
-    Avatar {
+    CustomImage {
       source: root.imagePath
       Layout.preferredWidth: root.avatarSize
       Layout.preferredHeight: root.avatarSize
