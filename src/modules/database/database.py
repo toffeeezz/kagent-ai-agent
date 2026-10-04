@@ -122,7 +122,6 @@ class Database:
         speaker_name: str,
         attachments: Sequence[str] = (),
     ) -> MessageRow:
-        # `with self.conn` commits on success and rolls back on an exception,
         # so a message can never be saved without its attachments.
         with self.conn:
             cur = self.conn.execute(
