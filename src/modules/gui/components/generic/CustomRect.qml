@@ -1,4 +1,4 @@
-// [ame-chan] stripped comments
+// [ame-chan] debug outlines off by default so cards don't ship pink
 pragma ComponentBehavior: Bound
 import QtQuick
 import "../theme"
@@ -8,7 +8,7 @@ Rectangle {
   color: Theme.surfaceContainerLow
   radius: Theme.radiusLg
 
-  property bool debugVisible: true
+  property bool debugVisible: false
 
   Rectangle {
     id: debugBorder
