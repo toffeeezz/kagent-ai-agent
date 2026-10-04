@@ -1,75 +1,121 @@
+// [ame-chan] stripped comments
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 
 import "../generic"
+import "../theme"
 
 CustomRect {
   id: root
+
   required property int sessionId
   required property string title
   required property string agentName
 
   readonly property int bulletSize: 12
+  readonly property int dialogPad: Theme.spaceLg + Theme.spaceMd
+  readonly property bool selected: controller.selectedSessionId === sessionId
 
-  color: controller.selectedSessionId == sessionId ? "red" : "white"
+  readonly property color idleColor: Qt.rgba(Theme.surfaceContainerHigh.r, Theme.surfaceContainerHigh.g, Theme.surfaceContainerHigh.b, 0)
 
-  radius: 15
-  clip: true
-  scale: 0.9
+  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : idleColor)
+  radius: Theme.radiusMd
+  scale: leftTap.pressed ? 0.97 : 1
 
+  Behavior on color {
+    ColorAnimation {
+      duration: Theme.animFast
+    }
+  }
   Behavior on scale {
     NumberAnimation {
-      duration: 100
+      duration: Theme.animFast
       easing.type: Easing.InOutCubic
+    }
+  }
+
+  HoverHandler {
+    id: hover
+    cursorShape: Qt.PointingHandCursor
+  }
+
+  TapHandler {
+    id: leftTap
+    acceptedButtons: Qt.LeftButton
+    onTapped: controller.selectSession(root.sessionId, root.title)
+  }
+
+  TapHandler {
+    acceptedButtons: Qt.RightButton
+    onTapped: {
+      controller.selectSession(root.sessionId, root.title);
+      menu.popup(root, 0, root.height);
     }
   }
 
   RowLayout {
     anchors.fill: parent
-    anchors.margins: 10
-    spacing: 0
+    anchors.margins: Theme.spaceMd
+    spacing: Theme.spaceMd
 
-    CustomRect {
-      Layout.preferredHeight: root.bulletSize
+    Rectangle {
       Layout.preferredWidth: root.bulletSize
-      radius: root.bulletSize
+      Layout.preferredHeight: root.bulletSize
+      radius: root.bulletSize / 2
+      color: root.selected ? Theme.primary : Theme.outline
+
+      Behavior on color {
+        ColorAnimation {
+          duration: Theme.animFast
+        }
+      }
     }
 
     Text {
-      text: root.title
-
-      elide: Text.ElideRight
       Layout.fillWidth: true
-      horizontalAlignment: Text.AlignHCenter
+      text: root.title
+      color: root.selected ? Theme.secondaryContainerOn : Theme.surfaceOn
+      font.pixelSize: Theme.fontMd
+      elide: Text.ElideRight
+      horizontalAlignment: Text.AlignLeft
+      verticalAlignment: Text.AlignVCenter
     }
   }
 
-  MouseArea {
-    id: mouseArea
+  component RowMenuItem: MenuItem {
+    id: item
+    property color textColor: Theme.surfaceOn
 
-    anchors.fill: parent
-    hoverEnabled: true
-    cursorShape: Qt.PointingHandCursor
-    onPressed: root.scale = 0.8
-    onReleased: root.scale = 1
-    onEntered: root.scale = 1
-    onExited: root.scale = 0.9
-    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    implicitHeight: 40
+    leftPadding: Theme.spaceLg
+    rightPadding: Theme.spaceLg
 
-    onClicked: mouse => {
-      if (mouse.button === Qt.RightButton) {
-        controller.selectSession(root.sessionId, root.title);
-        menu.popup(root, 0, root.height);
-      } else if (mouse.button === Qt.LeftButton)
-        controller.selectSession(root.sessionId, root.title);
+    contentItem: Text {
+      text: item.text
+      color: item.textColor
+      font.pixelSize: Theme.fontMd
+      verticalAlignment: Text.AlignVCenter
+    }
+    background: Rectangle {
+      radius: Theme.radiusSm
+      color: item.highlighted ? Theme.surfaceContainerHighest : "transparent"
     }
   }
 
   Menu {
     id: menu
 
-    MenuItem {
+    padding: Theme.spaceSm
+
+    background: Rectangle {
+      implicitWidth: 180
+      color: Theme.surfaceContainerHigh
+      radius: Theme.radiusMd
+    }
+
+    RowMenuItem {
       text: "Edit name"
       onTriggered: {
         renameField.text = root.title;
@@ -77,10 +123,16 @@ CustomRect {
       }
     }
 
-    MenuSeparator {}
+    MenuSeparator {
+      contentItem: Rectangle {
+        implicitHeight: 1
+        color: Theme.outlineVariant
+      }
+    }
 
-    MenuItem {
+    RowMenuItem {
       text: "Delete"
+      textColor: Theme.error
       onTriggered: deleteDialog.open()
     }
   }
@@ -88,12 +140,56 @@ CustomRect {
   Dialog {
     id: renameDialog
 
-    title: "Edit name"
     parent: Overlay.overlay
     anchors.centerIn: Overlay.overlay
-    width: 300
+    width: 360
     modal: true
-    standardButtons: Dialog.Ok | Dialog.Cancel
+
+    leftPadding: root.dialogPad
+    rightPadding: root.dialogPad
+    topPadding: Theme.spaceSm
+    bottomPadding: Theme.spaceLg
+
+    background: Rectangle {
+      color: Theme.surfaceContainerHigh
+      radius: Theme.radiusXl
+    }
+
+    header: Text {
+      text: "Edit name"
+      color: Theme.surfaceOn
+      font.pixelSize: Theme.fontLg
+      leftPadding: root.dialogPad
+      rightPadding: root.dialogPad
+      topPadding: root.dialogPad
+      bottomPadding: Theme.spaceSm
+    }
+
+    footer: Item {
+      implicitHeight: Theme.buttonHeight + Theme.spaceLg
+
+      RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: root.dialogPad
+        anchors.rightMargin: root.dialogPad
+        anchors.bottomMargin: Theme.spaceLg
+        spacing: Theme.spaceSm
+
+        Item {
+          Layout.fillWidth: true
+        }
+        AppButton {
+          text: "Cancel"
+          variant: "text"
+          onClicked: renameDialog.reject()
+        }
+        AppButton {
+          text: "Save"
+          variant: "filled"
+          onClicked: renameDialog.accept()
+        }
+      }
+    }
 
     onOpened: {
       renameField.forceActiveFocus();
@@ -107,25 +203,90 @@ CustomRect {
 
     TextField {
       id: renameField
-      anchors.left: parent.left
-      anchors.right: parent.right
-      onAccepted: renameDialog.accept()   // Enter confirms
+
+      width: renameDialog.availableWidth
+      color: Theme.surfaceOn
+      selectionColor: Theme.primaryContainer
+      selectedTextColor: Theme.primaryContainerOn
+      placeholderTextColor: Theme.textMuted
+      font.pixelSize: Theme.fontMd
+      leftPadding: Theme.spaceMd
+      rightPadding: Theme.spaceMd
+      selectByMouse: true
+
+      background: Rectangle {
+        radius: Theme.radiusMd
+        color: Theme.surfaceContainerLow
+        border.width: renameField.activeFocus ? 2 : 1
+        border.color: renameField.activeFocus ? Theme.primary : Theme.outlineVariant
+      }
+
+      onAccepted: renameDialog.accept()
     }
   }
 
   Dialog {
     id: deleteDialog
 
-    title: "Delete session?"
     parent: Overlay.overlay
     anchors.centerIn: Overlay.overlay
+    width: 360
     modal: true
-    standardButtons: Dialog.Yes | Dialog.Cancel
+
+    leftPadding: root.dialogPad
+    rightPadding: root.dialogPad
+    topPadding: Theme.spaceSm
+    bottomPadding: Theme.spaceLg
+
+    background: Rectangle {
+      color: Theme.surfaceContainerHigh
+      radius: Theme.radiusXl
+    }
+
+    header: Text {
+      text: "Delete session?"
+      color: Theme.surfaceOn
+      font.pixelSize: Theme.fontLg
+      leftPadding: root.dialogPad
+      rightPadding: root.dialogPad
+      topPadding: root.dialogPad
+      bottomPadding: Theme.spaceSm
+    }
+
+    footer: Item {
+      implicitHeight: Theme.buttonHeight + Theme.spaceLg
+
+      RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: root.dialogPad
+        anchors.rightMargin: root.dialogPad
+        anchors.bottomMargin: Theme.spaceLg
+        spacing: Theme.spaceSm
+
+        Item {
+          Layout.fillWidth: true
+        }
+        AppButton {
+          text: "Cancel"
+          variant: "text"
+          onClicked: deleteDialog.reject()
+        }
+        AppButton {
+          text: "Delete"
+          variant: "danger"
+          onClicked: deleteDialog.accept()
+        }
+      }
+    }
 
     onAccepted: controller.deleteSession(root.sessionId)
 
     Text {
+      width: deleteDialog.availableWidth
       text: "\"" + root.title + "\" will be permanently deleted."
+      color: Theme.surfaceVariantOn
+      font.pixelSize: Theme.fontMd
+      wrapMode: Text.Wrap
     }
   }
 }

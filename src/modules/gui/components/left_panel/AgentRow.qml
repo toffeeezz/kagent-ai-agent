@@ -1,60 +1,85 @@
+// [ame-chan] stripped comments
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 
 import "../generic"
+import "../theme"
 
 CustomRect {
   id: root
+
   required property string agentName
   required property string imagePath
+
   readonly property real avatarSize: 50
+  readonly property bool selected: controller.selectedAgent === agentName
+
+  readonly property color idleColor: Qt.rgba(Theme.surfaceContainerHigh.r, Theme.surfaceContainerHigh.g, Theme.surfaceContainerHigh.b, 0)
 
   implicitHeight: 70
-  implicitWidth: parent.width
+  implicitWidth: parent ? parent.width : 0
 
-  radius: 15
-  clip: true
+  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : idleColor)
+  radius: Theme.radiusMd
+  scale: tap.pressed ? 0.97 : 1
+
+  Behavior on color {
+    ColorAnimation {
+      duration: Theme.animFast
+    }
+  }
 
   Behavior on scale {
     NumberAnimation {
-      duration: 100
+      duration: Theme.animFast
       easing.type: Easing.InOutSine
     }
   }
-  scale: 0.9
+
+  HoverHandler {
+    id: hover
+    cursorShape: Qt.PointingHandCursor
+  }
+
+  TapHandler {
+    id: tap
+    onTapped: controller.selectAgent(root.agentName)
+  }
 
   RowLayout {
     anchors.fill: parent
-    anchors.margins: 10
+    anchors.margins: Theme.spaceMd
+    spacing: Theme.spaceMd
 
-    CustomImage {
-      source: root.imagePath
+    Item {
+      id: avatarContainer
       Layout.preferredWidth: root.avatarSize
       Layout.preferredHeight: root.avatarSize
+
+      CustomImage {
+        id: avatarImage
+        source: root.imagePath
+        anchors.fill: parent
+      }
+
+      Rectangle {
+        anchors.fill: parent
+        anchors.margins: -1
+        radius: width / 2
+        color: "transparent"
+        border.width: root.selected ? 2 : 0
+        border.color: Theme.primary
+      }
     }
 
     Text {
-      text: root.agentName
-
-      elide: Text.ElideRight
       Layout.fillWidth: true
       Layout.alignment: Qt.AlignVCenter
+      text: root.agentName
+      color: Theme.surfaceOn
+      font.pixelSize: Theme.fontMd
+      elide: Text.ElideRight
     }
-  }
-
-  MouseArea {
-    id: mouseArea
-
-    anchors.fill: parent
-    hoverEnabled: true
-    cursorShape: Qt.PointingHandCursor
-
-    onPressed: root.scale = 0.8
-    onReleased: root.scale = 1
-
-    onClicked: controller.selectAgent(root.agentName)
-
-    onEntered: root.scale = 1
-    onExited: root.scale = 0.9
   }
 }

@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 
 import "../generic"
+import "../theme"
 
 CustomRect {
   id: root
@@ -27,18 +28,18 @@ CustomRect {
 
         Text {
           text: "Agents"
-          font.pixelSize: 20
+          font.pixelSize: Theme.fontLg
+          color: Theme.surfaceOn
           Layout.fillWidth: true
           horizontalAlignment: Text.AlignHCenter
         }
 
         ListView {
-
           Layout.fillHeight: true
           Layout.fillWidth: true
 
-          Layout.leftMargin: 10
-          Layout.rightMargin: 10
+          Layout.leftMargin: Theme.spaceMd
+          Layout.rightMargin: Theme.spaceMd
           clip: true
           spacing: 0
           model: controller.agentModel
@@ -56,7 +57,8 @@ CustomRect {
 
       Text {
         text: "Sessions"
-        font.pixelSize: 16
+        font.pixelSize: Theme.fontMd
+        color: Theme.surfaceOn
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
       }
@@ -68,22 +70,22 @@ CustomRect {
 
         Layout.fillWidth: true
         Layout.preferredHeight: 40
-        Layout.leftMargin: 10
-        Layout.rightMargin: 10
-        radius: 15
+        Layout.leftMargin: Theme.spaceMd
+        Layout.rightMargin: Theme.spaceMd
+        radius: Theme.radiusMd
         clip: true
         scale: 0.9
 
         Behavior on scale {
           NumberAnimation {
-            duration: 100
+            duration: Theme.animFast
             easing.type: Easing.InOutCubic
           }
         }
 
         RowLayout {
           anchors.fill: parent
-          anchors.margins: 10
+          anchors.margins: Theme.spaceMd
           spacing: 0
 
           CustomRect {
@@ -94,7 +96,7 @@ CustomRect {
 
           Text {
             text: "New Session"
-
+            color: Theme.surfaceOn
             elide: Text.ElideRight
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
@@ -116,14 +118,13 @@ CustomRect {
       }
 
       ListView {
-
         Layout.fillHeight: true
         Layout.fillWidth: true
 
-        Layout.leftMargin: 10
-        Layout.rightMargin: 10
+        Layout.leftMargin: Theme.spaceMd
+        Layout.rightMargin: Theme.spaceMd
         clip: true
-        spacing: 5
+        spacing: Theme.spaceXs
         model: controller.sessionModel
 
         delegate: SessionRow {
@@ -137,7 +138,7 @@ CustomRect {
       id: settingsBar
 
       Layout.fillWidth: true
-      Layout.preferredHeight: 100
+      Layout.preferredHeight: Theme.buttonHeight * 2 + Theme.spaceLg
     }
   }
 }
