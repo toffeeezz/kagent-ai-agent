@@ -24,7 +24,6 @@ CustomRect {
   }
 
   Text {
-
     text: "Say hi to " + controller.selectedAgent
     font.pixelSize: 30
     horizontalAlignment: Text.AlignHCenter
@@ -32,7 +31,7 @@ CustomRect {
     width: root.width
     height: root.height
 
-    visible: list.count === 0 && !welcomeText.visible
+    visible: controller.messageModel.count === 0 && !welcomeText.visible
   }
 
   ListView {
@@ -46,30 +45,137 @@ CustomRect {
     boundsBehavior: Flickable.StopAtBounds
     model: controller.messageModel
 
-    ScrollBar.vertical: ScrollBar {}
+    displayMarginBeginning: 4000
+    displayMarginEnd: 4000
+
+    topMargin: 16
+    bottomMargin: 16
 
     property bool stickToEnd: true
-
     property bool revealing: false
+    readonly property bool userInteracting: vbar.pressed || dragging || flicking || moving
+
+    ScrollBar.vertical: ScrollBar {
+      id: vbar
+
+      onPressedChanged: {
+        if (pressed)
+          list.stickToEnd = false;
+        else
+          list.stickToEnd = list.distanceFromEnd() < 4;
+      }
+    }
+
+    function scrollToEnd() {
+      if (userInteracting)
+        return;
+      const minY = originY - topMargin;
+      const endY = originY + contentHeight + bottomMargin - height;
+      contentY = Math.max(minY, endY);
+    }
+
+    function distanceFromEnd() {
+      return (originY + contentHeight + bottomMargin - height) - contentY;
+    }
 
     onContentHeightChanged: if (stickToEnd)
-      positionViewAtEnd()
+      scrollToEnd()
+    onHeightChanged: if (stickToEnd)
+      scrollToEnd()
 
+    onContentYChanged: if (userInteracting)
+      stickToEnd = distanceFromEnd() < 4
     onMovingChanged: if (!moving)
-      stickToEnd = atYEnd
+      stickToEnd = distanceFromEnd() < 4
+
+    onCountChanged: {
+      revealing = true;
+      revealTimer.restart();
+    }
+
+    Timer {
+      id: revealTimer
+      interval: 400
+      onTriggered: list.revealing = false
+    }
 
     Connections {
       target: controller
+
       function onSelectedSessionChanged() {
         list.revealing = true;
+        revealTimer.restart();
 
         list.stickToEnd = true;
         list.forceLayout();
-        list.positionViewAtEnd();
-        Qt.callLater(list.positionViewAtEnd);
+        list.scrollToEnd();
+        Qt.callLater(list.scrollToEnd);
+      }
+    }
+    Connections {
+      target: controller.messageModel
+
+      function onRowsAboutToBeInserted() {
+        list.revealing = true;
+        revealTimer.restart();
       }
     }
 
     delegate: MessageBubble {}
+
+    footer: Item {
+      id: thinkingFooter
+
+      readonly property bool active: controller.isGenerating
+
+      width: ListView.view.width
+      height: active ? 36 : 0
+      visible: active
+
+      Row {
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 6
+
+        Repeater {
+          model: 3
+
+          Rectangle {
+            id: dot
+            required property int index
+
+            width: 8
+            height: 8
+            radius: 4
+            color: "gray"
+
+            SequentialAnimation on opacity {
+              running: thinkingFooter.active
+              loops: Animation.Infinite
+              PauseAnimation {
+                duration: dot.index * 150
+              }
+              NumberAnimation {
+                from: 0.25
+                to: 1
+                duration: 350
+              }
+              NumberAnimation {
+                from: 1
+                to: 0.25
+                duration: 350
+              }
+              PauseAnimation {
+                duration: (2 - dot.index) * 150
+              }
+            }
+          }
+        }
+
+        Text {
+          text: controller.thinkingLabel || "Thinking…"
+          color: "gray"
+        }
+      }
+    }
   }
 }
