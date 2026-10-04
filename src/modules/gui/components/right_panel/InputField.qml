@@ -18,6 +18,22 @@ CustomRect {
   Layout.fillWidth: true
   Layout.preferredHeight: Math.max(minInputHeight, Math.min(input.implicitHeight + pad * 2, maxInputHeight))
 
+  function submit() {
+    if (controller.isGenerating)
+      return;
+    if (input.text.trim().length > 0) {
+      controller.addMessage(input.text);
+      input.clear();
+    }
+  }
+  FileDialog {
+    id: picker
+    title: "Attach files"
+    fileMode: FileDialog.OpenFiles
+    nameFilters: ["Images (*.png *.jpg *.jpeg *.webp)", "All files (*)"]
+    onAccepted: controller.attachmentModel.addUrls(selectedFiles)
+  }
+
   RowLayout {
     id: inputRow
     anchors.fill: parent
@@ -47,10 +63,8 @@ CustomRect {
         id: hover
         cursorShape: Qt.PointingHandCursor
       }
-      onClicked: {
-        controller.pickFiles();
-        console.log("clicked");
-      }
+
+      onClicked: picker.open()
     }
 
     ScrollView {
@@ -75,11 +89,45 @@ CustomRect {
           if (isEnter && !(event.modifiers & Qt.ShiftModifier)) {
             event.accepted = true;
             if (text.trim().length > 0) {
-              controller.addMessage(text);
+              root.submit();
               clear();
             }
           }
         }
+        Connections {
+          target: controller
+
+          function onRestoreInput(text) {
+            // Don't clobber anything the user has already started typing
+            if (input.text === "")
+              input.text = text;
+            input.forceActiveFocus();
+          }
+        }
+      }
+    }
+    Button {
+      id: sendBtn
+      text: controller.isGenerating ? "■" : "➤"
+      font.pixelSize: 22
+      Layout.preferredWidth: root.buttonSize
+      Layout.preferredHeight: root.buttonSize
+      Layout.alignment: Qt.AlignBottom
+      background: null
+
+      // Dim the send arrow when there's nothing to send; Stop is always active
+      enabled: controller.isGenerating || input.text.trim().length > 0
+      opacity: enabled ? 1 : 0.4
+
+      HoverHandler {
+        cursorShape: Qt.PointingHandCursor
+      }
+
+      onClicked: {
+        if (controller.isGenerating)
+          controller.stopGeneration();
+        else
+          root.submit();
       }
     }
   }
