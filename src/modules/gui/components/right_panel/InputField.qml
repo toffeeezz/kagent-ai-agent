@@ -18,8 +18,6 @@ CustomRect {
   Layout.fillWidth: true
   Layout.preferredHeight: Math.max(minInputHeight, Math.min(input.implicitHeight + pad * 2, maxInputHeight))
 
-  signal attachmentEmbedded
-
   RowLayout {
     id: inputRow
     anchors.fill: parent

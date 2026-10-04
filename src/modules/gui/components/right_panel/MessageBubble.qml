@@ -8,6 +8,7 @@ Item {
   id: root
   required property string text
   required property string role
+  required property var attachments
   readonly property bool fromUser: role === "user"
 
   property bool shown: false
@@ -132,6 +133,52 @@ Item {
                 wrapMode: TextEdit.WrapAnywhere
 
                 Component.onCompleted: highlighter.attach(textDocument, blockLoader.modelData.lang)
+              }
+            }
+          }
+        }
+      }
+
+      // Attachments (images as thumbnails, other files as a name tile)
+      Flow {
+        width: content.width
+        spacing: 6
+        visible: root.attachments.length > 0
+
+        Repeater {
+          model: root.attachments
+
+          delegate: Item {
+            id: att
+            required property var modelData
+
+            width: 80
+            height: 80
+
+            Image {
+              id: thumb
+              anchors.fill: parent
+              visible: att.modelData.isImage && status !== Image.Error
+              source: att.modelData.isImage ? att.modelData.url : ""
+              fillMode: Image.PreserveAspectCrop
+              asynchronous: true
+              sourceSize.width: 160
+            }
+
+            // Non-images, or images whose file is gone
+            Rectangle {
+              anchors.fill: parent
+              radius: 6
+              color: "#33000000"
+              visible: !att.modelData.isImage || thumb.status === Image.Error
+
+              Text {
+                anchors.centerIn: parent
+                width: parent.width - 8
+                text: att.modelData.name
+                elide: Text.ElideMiddle
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: 11
               }
             }
           }
