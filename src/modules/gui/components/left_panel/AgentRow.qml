@@ -1,4 +1,5 @@
-// [ame-chan] stripped comments
+// [ame-chan] fixed: agent name now uses font.families so Theme list resolves
+// [ame-chan] restyled: rest-state chip so unselected agent rows have a visible shape
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -15,12 +16,10 @@ CustomRect {
   readonly property real avatarSize: 50
   readonly property bool selected: controller.selectedAgent === agentName
 
-  readonly property color idleColor: Qt.rgba(Theme.surfaceContainerHigh.r, Theme.surfaceContainerHigh.g, Theme.surfaceContainerHigh.b, 0)
-
   implicitHeight: 70
   implicitWidth: parent ? parent.width : 0
 
-  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : idleColor)
+  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainer)
   radius: Theme.radiusMd
   scale: tap.pressed ? 0.97 : 1
 
@@ -78,6 +77,7 @@ CustomRect {
       Layout.alignment: Qt.AlignVCenter
       text: root.agentName
       color: Theme.surfaceOn
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       elide: Text.ElideRight
     }

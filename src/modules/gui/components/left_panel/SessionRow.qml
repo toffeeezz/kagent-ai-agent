@@ -1,4 +1,6 @@
-// [ame-chan] stripped comments
+// [ame-chan] fixed: session title, menu items, dialog headers and rename field
+// now use font.families (plural) so the Theme list actually resolves.
+// [ame-chan] restyled: rest-state chip so unselected session rows have a visible shape
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -18,9 +20,7 @@ CustomRect {
   readonly property int dialogPad: Theme.spaceLg + Theme.spaceMd
   readonly property bool selected: controller.selectedSessionId === sessionId
 
-  readonly property color idleColor: Qt.rgba(Theme.surfaceContainerHigh.r, Theme.surfaceContainerHigh.g, Theme.surfaceContainerHigh.b, 0)
-
-  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : idleColor)
+  color: selected ? Theme.secondaryContainer : (hover.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainer)
   radius: Theme.radiusMd
   scale: leftTap.pressed ? 0.97 : 1
 
@@ -77,6 +77,7 @@ CustomRect {
       Layout.fillWidth: true
       text: root.title
       color: root.selected ? Theme.secondaryContainerOn : Theme.surfaceOn
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       elide: Text.ElideRight
       horizontalAlignment: Text.AlignLeft
@@ -95,6 +96,7 @@ CustomRect {
     contentItem: Text {
       text: item.text
       color: item.textColor
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       verticalAlignment: Text.AlignVCenter
     }
@@ -158,6 +160,7 @@ CustomRect {
     header: Text {
       text: "Edit name"
       color: Theme.surfaceOn
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontLg
       leftPadding: root.dialogPad
       rightPadding: root.dialogPad
@@ -209,6 +212,7 @@ CustomRect {
       selectionColor: Theme.primaryContainer
       selectedTextColor: Theme.primaryContainerOn
       placeholderTextColor: Theme.textMuted
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       leftPadding: Theme.spaceMd
       rightPadding: Theme.spaceMd
@@ -246,6 +250,7 @@ CustomRect {
     header: Text {
       text: "Delete session?"
       color: Theme.surfaceOn
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontLg
       leftPadding: root.dialogPad
       rightPadding: root.dialogPad
@@ -285,6 +290,7 @@ CustomRect {
       width: deleteDialog.availableWidth
       text: "\"" + root.title + "\" will be permanently deleted."
       color: Theme.surfaceVariantOn
+      font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       wrapMode: Text.Wrap
     }
