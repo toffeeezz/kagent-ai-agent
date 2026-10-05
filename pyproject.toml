@@ -14,6 +14,7 @@ dependencies = [
   "markdown",
   "PyQt6",
   "PyQt6-stubs",
+  "sqlite-vec",
   "PyMuPDF",
   "python-frontmatter",
   "pymupdf4llm",
