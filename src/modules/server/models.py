@@ -48,11 +48,11 @@ class LLMPayload(ServerPayload):
 
 
 class OpenRouterUsage(BaseModel):
-    completion_tokens: int
-    prompt_tokens: int
-    total_tokens: int
-    cost: float
-    cost_details: dict[str, float] | None = None
+    completion_tokens: int = 0  # embeddings have no completion tokens
+    prompt_tokens: int = 0
+    total_tokens: int = 0
+    cost: float = 0.0
+    cost_details: dict[str, float | None] | None = None
 
 
 class FinishReason(StrEnum):

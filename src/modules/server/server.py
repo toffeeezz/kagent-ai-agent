@@ -87,6 +87,7 @@ class Server:
                 embeddings.append(embedding)
         else:
             embedding = CustomEmbedding(text=input, vectors=results.data[0].embedding)
+            embeddings.append(embedding)
 
         return EmbeddingResponse(embeddings=embeddings)
 
@@ -98,15 +99,26 @@ class Server:
             len(payload.messages),
             len(payload.tools),
         )
+        p = payload.params
         params: CompletionCreateParamsNonStreaming = {
             "model": payload.model,
-            "max_completion_tokens": payload.params.max_completion_tokens,
             "messages": payload.messages,
             "tools": payload.tools,
             "tool_choice": payload.tool_choice,
             "stream": False,
-            "reasoning_effort": payload.params.reasoning_effort,
         }
+        optional: dict[str, object] = {
+            "max_completion_tokens": p.max_completion_tokens,
+            "reasoning_effort": p.reasoning_effort,
+            "temperature": p.temperature,
+            "top_p": p.top_p,
+            "frequency_penalty": p.frequency_penalty,
+            "presence_penalty": p.presence_penalty,
+            "seed": p.seed,
+            "stop": p.stop,
+            "response_format": p.response_format,
+        }
+        params.update({k: v for k, v in optional.items() if v is not None})  # pyright: ignore[reportCallIssue, reportArgumentType]
         result = await self._request_llm_non_streaming(
             self.client, payload.agent_name, params=params
         )
