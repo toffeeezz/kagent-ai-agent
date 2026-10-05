@@ -13,9 +13,9 @@ dependencies = [
   "python-dotenv",
   "markdown",
   "PyQt6",
-  "PyQt6-stubs",
   "sqlite-vec",
   "PyMuPDF",
+  "qasync",
   "python-frontmatter",
   "pymupdf4llm",
 ]
@@ -27,7 +27,7 @@ where = ["src"]
 kagent = "modules.gui.app:main"
 
 [project.optional-dependencies]
-dev = ["ruff", "rich", "pytest", "pytest-asyncio"]
+dev = ["ruff", "rich", "pytest", "pytest-asyncio", "PyQt6-stubs"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
