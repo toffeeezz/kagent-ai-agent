@@ -50,19 +50,35 @@
 
 ## What is it?
 
-**KAgent** is a desktop application for chatting with multiple AI agents, each with its own distinct personality, voice, and behavior. Agents are defined by Markdown files with YAML frontmatter that specify the name, model, temperature, reasoning effort, max loop count, and a full persona prompt (including jailbreak resistance and verification keywords).
+**KAgent** is a desktop application for building and running AI agents that do real work, not just chat. Each agent has its own personality, voice, and behavior, and can act directly on your local environment through a pluggable toolkit system: reading and writing files, managing a project, and running git operations. You can use the agents that ship with the app or create your own.
+
+Agents are defined by Markdown files with YAML frontmatter that specify the name, model, temperature, reasoning effort, max loop count, and a full persona prompt (including jailbreak resistance and verification keywords). Anyone can add a new agent, or extend what an agent can do with a new toolkit, without touching the core code.
 
 The app uses **OpenRouter** as its LLM provider and supports:
 
-- Function and tool calling through a pluggable toolkit system
+- Function and tool calling through a pluggable toolkit system, so agents can act on your files and repositories
 - Image attachments for vision-capable models
 - Persistent SQLite storage for sessions, messages, and memory
-- A background memory system with embeddings, ranked recall, and decay
+- A background memory system with embeddings, ranked recall, and decay, so agents learn about you over time
 - A Qt Quick (QML) interface with a custom Material You-style theme and hot-reload during development
 
 ### The problem it addresses
 
-Standard chatbots are one-size-fits-all. KAgent gives you multiple agent personalities in a single app, each with its own memory, tools, and behavior. It is designed as a persistent AI companion framework where the agents know they are AI, know they are works in progress, and have built-in resistance to jailbreak attempts and prompt injection.
+There is a growing need for an intelligent, interactive assistant that can handle complex tasks such as file system operations, coding, and version control while keeping a coherent conversation context. Existing solutions (Claude Code, ChatGPT, GitHub Copilot) are often tied to specific editors, locked behind a subscription or paywall, limited to a sandbox that can't touch your project files, or lack an extensible tool-calling framework for manipulating the local environment.
+
+KAgent provides a desktop-based, open, and extensible alternative. Instead of one-size-fits-all chatbots, you get multiple agents, each with its own memory, tools, and behavior, living inside your project and operating on it directly. With the toolkit system, people can build **working agents**, not only chatbots to talk to.
+
+### Who is it for?
+
+KAgent is primarily designed for personal use, and it is built for a few kinds of people:
+
+- **People who want more than a stiff assistant.** If you want an agent with a real personality that remembers you and adapts over time, KAgent gives you that out of the box with four prebuilt agents (Amadeus, Ame, Aqua, and Silver Wolf).
+- **People who want to create their own agents.** Write a Markdown file with YAML frontmatter and you can define an agent's name, model, temperature, reasoning effort, and a full persona prompt. You decide who the agent is and how it talks, with no changes to the core code. See [Creating Agents](docs/CREATING_AGENTS.md).
+- **People who want to customize what their agents can do.** Each agent can be given its own set of tools by building toolkits (a `tools.py` plus a `SKILL.md`). You can write your own toolkits to give an agent exactly the abilities it needs, and agents can discover and enable toolkits themselves. See [Creating Toolkits](docs/CREATING_TOOLKITS.md).
+- **Students and developers working on software projects.** KAgent can act as a coding assistant that lives inside your project and can:
+  - Read, write, and manage files in the local file system (safety guardrails still need further development)
+  - Perform git version control operations (limited to a few operations currently)
+  - Be extended with new capabilities through the modular toolkit system
 
 ---
 
