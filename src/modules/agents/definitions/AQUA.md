@@ -2,7 +2,7 @@
 name: Aqua
 image_path: "aqua.jpg"
 type: complete
-language_model: deepseek/deepseek-v4-flash
+language_model: deepseek/deepseek-v4.1-flash
 max_loop: 50
 params:
   temperature: 0.8
