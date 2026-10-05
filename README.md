@@ -363,20 +363,20 @@ pip install -e ".[dev]"
 > [!NOTE]
 > On some minimal Linux installs, Qt may fail to start with an error about the `xcb` platform plugin. Installing `libxcb-cursor0` (Debian/Ubuntu: `sudo apt install libxcb-cursor0`) usually fixes it.
 
-### Step 4: Set up your API key
+### Step 4: Set up your environment file
 
-Create a file named `.env` in the project root containing your key:
-
-```env
-API_KEY=sk-or-v1-your_openrouter_key_here
-```
-
-You can create it with a text editor, or from the terminal:
+Create a file named `.env` in the project root. The API key is required on every platform. Linux needs one extra line.
 
 <details open>
 <summary><b>Windows</b></summary>
 
 <br>
+
+`.env` contents:
+
+```env
+API_KEY=sk-or-v1-your_openrouter_key_here
+```
 
 **PowerShell**
 
@@ -393,13 +393,40 @@ echo API_KEY=sk-or-v1-your_openrouter_key_here> .env
 </details>
 
 <details open>
-<summary><b>macOS / Linux</b></summary>
+<summary><b>macOS</b></summary>
 
 <br>
+
+`.env` contents:
+
+```env
+API_KEY=sk-or-v1-your_openrouter_key_here
+```
 
 ```bash
 echo "API_KEY=sk-or-v1-your_openrouter_key_here" > .env
 ```
+
+</details>
+
+<details open>
+<summary><b>Linux</b></summary>
+
+<br>
+
+`.env` contents:
+
+```env
+API_KEY=sk-or-v1-your_openrouter_key_here
+QT_QPA_PLATFORMTHEME=xdgdesktopportal
+```
+
+```bash
+printf "API_KEY=sk-or-v1-your_openrouter_key_here\nQT_QPA_PLATFORMTHEME=xdgdesktopportal\n" > .env
+```
+
+> [!IMPORTANT]
+> `QT_QPA_PLATFORMTHEME=xdgdesktopportal` is required on Linux. Without it, the QML interface can fail to render correctly.
 
 </details>
 
