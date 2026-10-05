@@ -146,14 +146,11 @@ All four agents currently run on DeepSeek models through OpenRouter. Their setti
 ```text
 kagent/
 ├── pyproject.toml              # Project metadata (v0.2.0), dependencies, dev extras, entry point (kagent command)
-├── pyrightconfig.json          # Pyright configuration
 ├── .env                        # API key (not committed)
 ├── data/
 │   └── agent.db                # Single SQLite database (sessions, messages, attachments, memories, embeddings)
 ├── docs/
 │   └── imgs/                   # Screenshots
-├── logs/
-│   └── app.log                 # Rotating log files (10 MB, 5 backups)
 ├── src/
 │   └── modules/
 │       ├── backend.py          # Protocol definitions + mock implementations for agents and sessions
@@ -203,8 +200,7 @@ kagent/
 │       │       └── git/        # Git toolkit (SKILL.md + tools.py)
 │       └── utils/
 │           └── logger.py       # Rich console handler + rotating file handler
-├── essay.txt                   # Sample file for testing the file toolkit
-└── text.png                    # Sample image for testing attachments
+└── .gitignore                  # Files to ignore when pushing
 ```
 
 <details>
