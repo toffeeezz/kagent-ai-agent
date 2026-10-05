@@ -31,6 +31,9 @@
 - [What is it?](#what-is-it)
 - [Project Objectives](#project-objectives)
 - [Features](#features)
+  - [Create your own toolkit](#create-your-own-toolkit)
+  - [Prebuilt agents](#prebuilt-agents)
+  - [Create your own agent](#create-your-own-agent)
 - [Technologies Used](#technologies-used)
 - [Project Structure](#project-structure)
 - [Installation and Setup](#installation-and-setup)
@@ -88,7 +91,11 @@ Standard chatbots are one-size-fits-all. KAgent gives you multiple agent persona
 | **Code syntax highlighting** | Code blocks in chat messages are highlighted with Pygments (Monokai theme) through a custom `CodeHighlighter` that operates on Qt's `QTextDocument`. |
 | **Logging** | Rich console output with colored keywords, plus a rotating file handler (10 MB, 5 backups, DEBUG level). |
 
-### Included agents
+### Create your own toolkit
+
+Agents can use any toolkit placed in `src/modules/toolkits/kits/`. Each toolkit is a folder with a `tools.py` (the functions) and a `SKILL.md` (instructions for the model). See [Creating Toolkits](docs/CREATING_TOOLKITS.md) for the full guide, and start from the [sample skill](docs/templates/SAMPLE_SKILL.md) and [sample tools](docs/templates/sample_tools.py) templates.
+
+### Prebuilt agents
 
 All four agents currently run on DeepSeek models through OpenRouter. Their settings live in the YAML frontmatter of each file in `src/modules/agents/definitions/` and can be modified.
 
@@ -101,6 +108,10 @@ All four agents currently run on DeepSeek models through OpenRouter. Their setti
 | <img src="src/modules/agents/avatars/ame.jpg" width="40"> | **Ame** | `deepseek/deepseek-v4-flash` | 40 | 0.8 | low |
 | <img src="src/modules/agents/avatars/aqua.jpg" width="40"> | **Aqua** | `deepseek/deepseek-v4.1-flash` | 50 | 0.8 | low |
 | <img src="src/modules/agents/avatars/silver_wolf.jpg" width="40"> | **Silver Wolf** | `deepseek/deepseek-v4-flash` | 50 | 0.8 | medium |
+
+### Create your own agent
+
+Want an agent of your own? Add a Markdown file with YAML frontmatter to `src/modules/agents/definitions/` and restart the app. The full walkthrough is in [Creating Agents](docs/CREATING_AGENTS.md), and you can start from the [sample agent template](docs/templates/SAMPLE_AGENT_MD.md).
 
 ---
 
@@ -150,7 +161,10 @@ kagent/
 ├── data/
 │   └── agent.db                # Single SQLite database (sessions, messages, attachments, memories, embeddings)
 ├── docs/
-│   └── imgs/                   # Screenshots
+│   ├── imgs/                   # Screenshots
+│   ├── templates/              # Sample agent, skill, and tools templates
+│   ├── CREATING_AGENTS.md      # Guide: building your own agent
+│   └── CREATING_TOOLKITS.md    # Guide: building your own toolkit
 ├── src/
 │   └── modules/
 │       ├── backend.py          # Protocol definitions + mock implementations for agents and sessions
@@ -231,6 +245,9 @@ kagent/
 | `backend.py` | `Protocol` interfaces the controller depends on, plus their implementations. |
 | `utils/logger.py` | Logging configuration. |
 | `docs/imgs/` | Screenshots for documentation. |
+| `docs/templates/` | Starter templates for new agents (`SAMPLE_AGENT_MD.md`), toolkit instructions (`SAMPLE_SKILL.md`), and toolkit code (`sample_tools.py`). |
+| `docs/CREATING_AGENTS.md` | Step-by-step guide to writing your own agent. |
+| `docs/CREATING_TOOLKITS.md` | Step-by-step guide to writing your own toolkit. |
 
 </details>
 
@@ -420,7 +437,7 @@ python3 -m modules.gui.app
 ## How to Use the System
 
 1. **Launch the app.** You'll see a dark-themed two-panel window. The left panel shows agents (with avatars) and their sessions, and the right panel is the chat area.
-2. **Select an agent** from the left panel. Available agents: **Amadeus, Ame, Aqua, Silver Wolf**. Each has a unique personality defined in its Markdown file.
+2. **Select an agent** from the left panel. Available agents: **Amadeus, Ame, Aqua, Silver Wolf**. Each has a unique personality defined in its Markdown file. You can also [create your own agent](#create-your-own-agent).
 3. **Create a new session** with the **New Session** button. Sessions are scoped per agent. Click an existing session to load its history.
 4. **Type your message** in the input field at the bottom right. Press **Enter** to send, or **Shift+Enter** for a newline.
 5. **Attach images** (optional) with the attachment button or by dragging files into the input area. Images appear as thumbnails.
