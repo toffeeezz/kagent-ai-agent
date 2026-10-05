@@ -807,7 +807,7 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 ## Testing
 
 > [!NOTE]
-> The `tests/` directory exists but is empty, so there are no automated tests yet. Testing was done **manually** by running the application. `pytest` and `pytest-asyncio` are included as dev dependencies, ready for when tests are added.
+> Testing was done **manually** by running the application. `pytest` and `pytest-asyncio` are included as dev dependencies, ready for when tests are added.
 
 ### Manual test cases
 
