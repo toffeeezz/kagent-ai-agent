@@ -165,6 +165,8 @@ kagent/
 │   ├── templates/              # Sample agent, skill, and tools templates
 │   ├── CREATING_AGENTS.md      # Guide: building your own agent
 │   └── CREATING_TOOLKITS.md    # Guide: building your own toolkit
+├── logs/
+│   └── app.log                 # Rotating log file (10 MB, 5 backups, DEBUG level)
 ├── src/
 │   └── modules/
 │       ├── backend.py          # Protocol definitions + mock implementations for agents and sessions
@@ -244,6 +246,7 @@ kagent/
 | `gui/components/` | All QML files making up the interface. |
 | `backend.py` | `Protocol` interfaces the controller depends on, plus their implementations. |
 | `utils/logger.py` | Logging configuration. |
+| `logs/app.log` | Rotating log file written by `utils/logger.py` (10 MB per file, 5 backups, DEBUG level). |
 | `docs/imgs/` | Screenshots for documentation. |
 | `docs/templates/` | Starter templates for new agents (`SAMPLE_AGENT_MD.md`), toolkit instructions (`SAMPLE_SKILL.md`), and toolkit code (`sample_tools.py`). |
 | `docs/CREATING_AGENTS.md` | Step-by-step guide to writing your own agent. |
