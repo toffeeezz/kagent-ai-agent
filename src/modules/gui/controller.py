@@ -30,6 +30,7 @@ from modules.gui.models import (
 logger = logging.getLogger(__name__)
 
 MAX_TOAST_CHARS = 300
+EXTRACT_EVERY = 6  # new messages (~3 exchanges) between extractions
 
 
 class AppController(QObject):
@@ -44,6 +45,8 @@ class AppController(QObject):
     _selected_agent: str
     _selected_session_id: int
     _status: dict[int, str]
+    _extracted_upto: dict[int, int]
+    _bg_tasks: set[asyncio.Task[None]]
 
     _agent_list_model: AgentListModel
     _session_list_model: SessionListModel
@@ -69,6 +72,8 @@ class AppController(QObject):
         self._attachment_list_model = AttachmentListModel()
         self._tasks = {}
         self._status = {}
+        self._extracted_upto = {}
+        self._bg_tasks = set()
         self._username = "toffeezzz"
         self._agent_list_model.add(agent_backend.list_agents())
 
@@ -148,6 +153,7 @@ class AppController(QObject):
     ) -> None:
         username = self._username
         user_saved = False
+        failed = False
         self._set_status(session_id, "Thinking…")
 
         try:
@@ -186,8 +192,12 @@ class AppController(QObject):
                     case ToolCallFinished():
                         self._set_status(session_id, "Thinking…")
                     case RunError(message=m):
+                        failed = True
                         logger.warning("Run failed, user message not saved: %s", m)
                         self._fail(m, session_id, attachments)
+
+            if not failed:
+                self._schedule_extraction(session_id, agent_name)
         except asyncio.CancelledError:
             if not user_saved:
                 if self._selected_session_id == session_id:
@@ -199,6 +209,22 @@ class AppController(QObject):
             self._fail(f"{type(e).__name__}: {e}", session_id, attachments)
         finally:
             self._set_status(session_id, None)
+
+    def _schedule_extraction(self, session_id: int, agent_name: str) -> None:
+        """Extract memories in the background every EXTRACT_EVERY new messages."""
+        rows = self._session_backend.get_messages(session_id)
+        last = self._extracted_upto.get(session_id, 0)
+        fresh = [r for r in rows if r.id > last]
+        if len(fresh) < EXTRACT_EVERY:
+            return
+        fresh = fresh[-20:]
+        self._extracted_upto[session_id] = fresh[-1].id
+
+        task = asyncio.ensure_future(
+            self._agent_backend.extract_memories(agent_name, fresh)
+        )
+        self._bg_tasks.add(task)  # keep a reference or it can be garbage-collected
+        task.add_done_callback(self._bg_tasks.discard)
 
     def _fail(
         self,

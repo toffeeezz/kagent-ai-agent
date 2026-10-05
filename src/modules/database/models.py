@@ -21,11 +21,15 @@ class MessageRow(BaseModel):
 
 
 class MemoryRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
     id: int
     agent_name: str
-    text: str
+    content: str
+    recall_score: float
     importance: float
-    retrieval_score: float
-    last_accessed: str
     created_at: str
+    last_accessed_at: str
+    message_ids: tuple[int, ...] = ()
+    # only set by search_memories / recall_memories
+    distance: float | None = None
+    similarity: float | None = None
+    score: float | None = None  # only set by recall_memories

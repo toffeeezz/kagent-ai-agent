@@ -32,6 +32,7 @@ from modules.agents.events import (
     ToolCallStarted,
 )
 from modules.database.models import MessageRow
+from modules.memory.service import recall_block
 from modules.server.models import LLMParams, LLMPayload, LLMResponse
 from modules.server.server import Server
 from modules.toolkits.errors import ToolExecutionError
@@ -310,6 +311,12 @@ class CompleteAgent(BaseAgent):
         except Exception as e:
             yield RunError(f"{type(e).__name__}: {e}")
 
+    async def _memory_message(
+        self, server: Server, text: str
+    ) -> ChatCompletionSystemMessageParam | None:
+        block = await recall_block(server, self.name, text)
+        return {"role": "system", "content": block} if block else None
+
     @override
     async def generate(
         self,
@@ -366,7 +373,13 @@ class CompleteAgent(BaseAgent):
             len(images or []),
             self._max_loops,
         )
+
+        # Per-turn recalled memories, placed right before the new user message.
+        # Never saved anywhere; removed again in the `finally` below.
+        memory_msg = await self._memory_message(server, input)
         user_message = self._build_user_message(input, username, images)
+        if memory_msg is not None:
+            self._messages.append(memory_msg)
         self._messages.append(user_message)
         _log_say(f"User {username}", input, len(images or []))
 
@@ -442,6 +455,10 @@ class CompleteAgent(BaseAgent):
                 )
                 self._record_failure(e)
             raise
+        finally:
+            # Memories are per-turn context: never leave them in the history.
+            if memory_msg is not None:
+                self._messages[:] = [m for m in self._messages if m is not memory_msg]
 
     def _pending_tool_call_ids(self) -> list[str]:
         """Tool calls in the history that never got a tool message."""

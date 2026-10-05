@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import Protocol
 
@@ -15,9 +16,14 @@ from modules.agents.models import (
     CompleteAgent,
     ImageSource,
 )
-from modules.database.database import Database
+from modules.database.database import DATABASE, Database
 from modules.database.models import MessageRow, SessionRow
+from modules.memory.extractor import extract_and_store
 from modules.server.server import Server
+
+logger = logging.getLogger(__name__)
+
+EXTRACTOR_NAME = "MEMORY_EXTRACTOR"
 
 
 class SessionsBackend(Protocol):
@@ -47,6 +53,9 @@ class AgentsBackend(Protocol):
         tool_choice: ChatCompletionToolChoiceOptionParam | None = None,
         history: list[ChatCompletionMessageParam] | None = None,
     ) -> AsyncIterator[AgentEvent]: ...
+    async def extract_memories(
+        self, agent_name: str, rows: Sequence[MessageRow]
+    ) -> None: ...
 
 
 class MockAgentsBackend:
@@ -61,9 +70,15 @@ class MockAgentsBackend:
         self._basic_agents = basic
         self._agent_definitions = definitions
         self._server = server
+        if EXTRACTOR_NAME not in basic:
+            logger.warning(
+                "Memory extractor '%s' not found: memories will be recalled but never created",
+                EXTRACTOR_NAME,
+            )
 
     def list_agents(self) -> list[AgentDefinition]:
-        return self._agent_definitions
+        # Basic agents are exlcuded sinec they aren't used for chatting
+        return [d for d in self._agent_definitions if d.type == "complete"]
 
     async def run_complete_agent(
         self,
@@ -84,12 +99,22 @@ class MockAgentsBackend:
         ):
             yield event
 
+    async def extract_memories(
+        self, agent_name: str, rows: Sequence[MessageRow]
+    ) -> None:
+        extractor = self._basic_agents.get(EXTRACTOR_NAME)
+        if extractor is None:
+            return  # already warned at startup
+        await extract_and_store(self._server, extractor, agent_name, rows)
+
 
 class MockSessionBackend:
     _database: Database
 
     def __init__(self) -> None:
-        self._database = Database()
+        # Share the module-level connection with the memory code instead of
+        # opening a second one to the same file.
+        self._database = DATABASE
 
     def list_sessions(self, agent_name: str) -> list[SessionRow]:
         return self._database.get_session_list(agent_name)
