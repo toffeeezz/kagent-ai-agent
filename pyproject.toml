@@ -18,6 +18,7 @@ dependencies = [
   "qasync",
   "python-frontmatter",
   "pymupdf4llm",
+  "rich",
 ]
 
 [tool.setuptools.packages.find]
@@ -27,7 +28,7 @@ where = ["src"]
 kagent = "modules.gui.app:main"
 
 [project.optional-dependencies]
-dev = ["ruff", "rich", "pytest", "pytest-asyncio", "PyQt6-stubs"]
+dev = ["ruff", "pytest", "pytest-asyncio", "PyQt6-stubs"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
