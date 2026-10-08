@@ -917,4 +917,3 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 | | |
 | --- | --- |
 | **Name** | toffeezzz |
-| **Section** | *Add your section here* |
