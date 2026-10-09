@@ -10,7 +10,7 @@ from PyQt6.QtCore import QUrl
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 
-from modules.backend import MockAgentsBackend, MockSessionBackend
+from modules.database.backend import MockAgentsBackend, MockSessionBackend
 from modules.gui.controller import AppController
 from modules.gui.highlighter import CodeHighlighter
 from modules.gui.loader import QmlReloader

@@ -9,7 +9,6 @@ from PyQt6.QtCore import (
     pyqtSlot,
 )
 
-from modules.agents.builder import AGENT_AVATAR_DIR
 from modules.agents.events import (
     GeneratingResponse,
     GenerationFinished,
@@ -18,7 +17,7 @@ from modules.agents.events import (
     ToolCallStarted,
 )
 from modules.agents.models import ImageSource, build_history
-from modules.backend import AgentsBackend, SessionsBackend
+from modules.database.backend import AgentsBackend, SessionsBackend
 from modules.gui.models import (
     AgentListModel,
     AttachmentItem,
@@ -30,7 +29,7 @@ from modules.gui.models import (
 logger = logging.getLogger(__name__)
 
 MAX_TOAST_CHARS = 300
-EXTRACT_EVERY = 6  # new messages (~3 exchanges) between extractions
+EXTRACT_EVERY = 6  # new messages
 
 
 class AppController(QObject):
@@ -52,7 +51,7 @@ class AppController(QObject):
     _session_list_model: SessionListModel
     _message_list_model: MessageListModel
     _attachment_list_model: AttachmentListModel
-    _tasks: dict[int, asyncio.Task[None]]  # session_id -> running send task
+    _tasks: dict[int, asyncio.Task[None]]
     _username: str
 
     def __init__(

@@ -1,6 +1,5 @@
 // [ame-chan] fixed: toast text was on font.family (singular) with a comma-joined
 // token, which Qt resolved to nothing — now font.families + a real list.
-// [ame-chan] stripped comments
 import QtQuick
 import QtQuick.Controls
 import "theme"

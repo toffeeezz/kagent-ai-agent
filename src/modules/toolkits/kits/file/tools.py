@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def _overlaps(a: Path, b: Path) -> bool:
 
 
 @register_tool()
-def read_file(path: str) -> ToolResult[str]:
+async def read_file(path: str) -> ToolResult[str]:
     """Reads and returns the full text contents of a file at the given path.
 
     Use this to inspect a file's contents before editing, summarizing, or
