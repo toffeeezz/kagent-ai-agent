@@ -15,7 +15,6 @@ DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data/agent.db"
 
 EMBEDDING_DIM = 4096
 
-# ---------- memory ranking ----------
 # score = W_RELEVANCE * similarity + W_IMPORTANCE * importance + W_RECALL * effective_recall
 W_RELEVANCE: float = 0.60
 W_IMPORTANCE: float = 0.25
@@ -57,21 +56,17 @@ CREATE TABLE IF NOT EXISTS memories (
     last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- many-to-many: one memory can come from several messages and
--- one message can produce several memories
 CREATE TABLE IF NOT EXISTS memory_messages (
     memory_id  INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
     message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     PRIMARY KEY (memory_id, message_id)
 );
 
--- sqlite-vec virtual table. memory_id mirrors memories.id
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_embeddings USING vec0(
     memory_id INTEGER PRIMARY KEY,
     embedding float[{EMBEDDING_DIM}] distance_metric=cosine
 );
 
--- virtual tables can't have foreign keys, so this keeps embeddings in sync
 CREATE TRIGGER IF NOT EXISTS trg_memories_delete_embedding
 AFTER DELETE ON memories
 BEGIN

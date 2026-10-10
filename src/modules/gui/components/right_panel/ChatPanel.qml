@@ -1,5 +1,4 @@
 // [ame-chan] fixed: welcome/placeholder/thinking text use font.families (plural)
-// [ame-chan] stripped comments
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
