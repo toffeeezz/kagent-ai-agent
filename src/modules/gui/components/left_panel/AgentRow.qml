@@ -1,7 +1,6 @@
-// [ame-chan] fixed: agent name now uses font.families so Theme list resolves
-// [ame-chan] restyled: rest-state chip so unselected agent rows have a visible shape
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 import "../generic"
@@ -15,6 +14,7 @@ CustomRect {
 
   readonly property real avatarSize: 50
   readonly property bool selected: controller.selectedAgent === agentName
+  readonly property int dialogPad: Theme.spaceLg + Theme.spaceMd
 
   implicitHeight: 70
   implicitWidth: parent ? parent.width : 0
@@ -43,7 +43,16 @@ CustomRect {
 
   TapHandler {
     id: tap
+    acceptedButtons: Qt.LeftButton
     onTapped: controller.selectAgent(root.agentName)
+  }
+
+  TapHandler {
+    acceptedButtons: Qt.RightButton
+    onTapped: {
+      controller.selectAgent(root.agentName);
+      menu.popup(root, 0, root.height);
+    }
   }
 
   RowLayout {
@@ -80,6 +89,112 @@ CustomRect {
       font.family: Theme.fontFamily
       font.pixelSize: Theme.fontMd
       elide: Text.ElideRight
+    }
+  }
+
+  component RowMenuItem: MenuItem {
+    id: item
+    property color textColor: Theme.surfaceOn
+
+    implicitHeight: 40
+    leftPadding: Theme.spaceLg
+    rightPadding: Theme.spaceLg
+
+    contentItem: Text {
+      text: item.text
+      color: item.textColor
+      font.family: Theme.fontFamily
+      font.pixelSize: Theme.fontMd
+      verticalAlignment: Text.AlignVCenter
+    }
+    background: Rectangle {
+      radius: Theme.radiusSm
+      color: item.highlighted ? Theme.surfaceContainerHighest : "transparent"
+    }
+  }
+
+  Menu {
+    id: menu
+
+    padding: Theme.spaceSm
+
+    background: Rectangle {
+      implicitWidth: 180
+      color: Theme.surfaceContainerHigh
+      radius: Theme.radiusMd
+    }
+
+    RowMenuItem {
+      text: "Delete"
+      textColor: Theme.error
+      onTriggered: deleteDialog.open()
+    }
+  }
+
+  Dialog {
+    id: deleteDialog
+
+    parent: Overlay.overlay
+    anchors.centerIn: Overlay.overlay
+    width: 360
+    modal: true
+
+    leftPadding: root.dialogPad
+    rightPadding: root.dialogPad
+    topPadding: Theme.spaceSm
+    bottomPadding: Theme.spaceLg
+
+    background: Rectangle {
+      color: Theme.surfaceContainerHigh
+      radius: Theme.radiusXl
+    }
+
+    header: Text {
+      text: "Delete agent?"
+      color: Theme.surfaceOn
+      font.family: Theme.fontFamily
+      font.pixelSize: Theme.fontLg
+      leftPadding: root.dialogPad
+      rightPadding: root.dialogPad
+      topPadding: root.dialogPad
+      bottomPadding: Theme.spaceSm
+    }
+
+    footer: Item {
+      implicitHeight: Theme.buttonHeight + Theme.spaceLg
+
+      RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: root.dialogPad
+        anchors.rightMargin: root.dialogPad
+        anchors.bottomMargin: Theme.spaceLg
+        spacing: Theme.spaceSm
+
+        Item {
+          Layout.fillWidth: true
+        }
+        AppButton {
+          text: "Cancel"
+          variant: "text"
+          onClicked: deleteDialog.reject()
+        }
+        AppButton {
+          text: "Delete"
+          variant: "danger"
+          onClicked: deleteDialog.accept()
+        }
+      }
+    }
+
+    onAccepted: controller.deleteAgent(root.agentName)
+
+    Text {
+      width: deleteDialog.availableWidth
+      text: "\"" + root.agentName + "\" and all of its sessions and memories will be permanently deleted."
+      color: Theme.surfaceVariantOn
+      font.family: Theme.fontFamily
+      font.pixelSize: Theme.fontMd
+      wrapMode: Text.Wrap
     }
   }
 }

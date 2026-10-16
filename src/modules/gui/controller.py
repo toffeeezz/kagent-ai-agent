@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import (
     QObject,
+    QUrl,
     pyqtProperty,  # pyright: ignore[reportAttributeAccessIssue]
     pyqtSignal,
     pyqtSlot,
@@ -29,7 +30,8 @@ from modules.gui.models import (
 logger = logging.getLogger(__name__)
 
 MAX_TOAST_CHARS = 300
-EXTRACT_EVERY = 6  # new messages
+EXTRACT_EVERY = 6
+TITLE_PREFIX_MAX = 60
 
 
 class AppController(QObject):
@@ -38,6 +40,7 @@ class AppController(QObject):
     generatingChanged: pyqtSignal = pyqtSignal()
     errorOccurred: pyqtSignal = pyqtSignal(str)
     restoreInput: pyqtSignal = pyqtSignal(str)
+    agentCreated: pyqtSignal = pyqtSignal(str)
 
     _agent_backend: AgentsBackend
     _session_backend: SessionsBackend
@@ -53,6 +56,7 @@ class AppController(QObject):
     _attachment_list_model: AttachmentListModel
     _tasks: dict[int, asyncio.Task[None]]
     _username: str
+    _titled_sessions: set[int]
 
     def __init__(
         self,
@@ -74,6 +78,7 @@ class AppController(QObject):
         self._extracted_upto = {}
         self._bg_tasks = set()
         self._username = "toffeezzz"
+        self._titled_sessions = set()
         self._agent_list_model.add(agent_backend.list_agents())
 
     # ---------- selection ----------
@@ -82,7 +87,10 @@ class AppController(QObject):
         if name != self._selected_agent:
             logger.info("New agent selected %s", name)
             self._selected_agent = name
+            self._selected_session_id = -1
             self.selectedAgentChanged.emit()
+            self.selectedSessionChanged.emit()
+            self._message_list_model.reset_to([])
             sessions = self._session_backend.list_sessions(self._selected_agent)
             self._session_list_model.reset_to(sessions)
 
@@ -95,6 +103,110 @@ class AppController(QObject):
             self.selectedSessionChanged.emit()
             self.generatingChanged.emit()
             self._message_list_model.reset_to(messages)
+
+    # ---------- agent creation ----------
+    @pyqtSlot(
+        str, str, str, str, str,
+        int,
+        str, str, str, str, str,
+        str, str, str,
+        bool, result=bool
+    )
+    def createAgent(
+        self,
+        name: str,
+        agent_type: str,
+        language_model: str,
+        persona: str,
+        avatar_source: str,
+        max_loop: int = 40,
+        temperature: str = "",
+        top_p: str = "",
+        frequency_penalty: str = "",
+        presence_penalty: str = "",
+        reasoning_effort: str = "",
+        max_completion_tokens: str = "",
+        seed: str = "",
+        stop: str = "",
+        response_format: bool = False,
+    ) -> bool:
+        if avatar_source.startswith("file://"):
+            avatar_source = QUrl(avatar_source).toLocalFile()
+
+        if max_loop <= 0:
+            max_loop = None
+
+        def _float(value: str) -> float | None:
+            if value == "":
+                return None
+            try:
+                return float(value)
+            except ValueError:
+                return None
+
+        def _int(value: str) -> int | None:
+            if value == "":
+                return None
+            try:
+                return int(value)
+            except ValueError:
+                return None
+
+        try:
+            self._agent_backend.create_agent(
+                name=name,
+                agent_type=agent_type,
+                language_model=language_model,
+                persona=persona,
+                avatar_source=avatar_source,
+                max_loop=max_loop,
+                temperature=_float(temperature),
+                top_p=_float(top_p),
+                frequency_penalty=_float(frequency_penalty),
+                presence_penalty=_float(presence_penalty),
+                reasoning_effort=reasoning_effort or None,
+                max_completion_tokens=_int(max_completion_tokens),
+                seed=_int(seed),
+                stop=([s.strip() for s in stop.split(",") if s.strip()] if stop else None),
+                response_format={"type": "json_object"} if response_format else None,
+            )
+        except Exception as e:
+            logger.exception("Failed to create agent")
+            self.errorOccurred.emit(f"Failed to create agent: {e}")
+            return False
+
+        self._agent_list_model.reset_to(self._agent_backend.list_agents())
+        logger.info("Agent created: %s", name)
+        self.agentCreated.emit(name)
+        self.selectAgent(name)
+        return True
+
+    @pyqtSlot(str, result=bool)
+    def deleteAgent(self, name: str) -> bool:
+        try:
+            sessions = self._session_backend.list_sessions(name)
+            for session in sessions:
+                task = self._tasks.get(session.id)
+                if task is not None and not task.done():
+                    task.cancel()
+            self._agent_backend.delete_agent(name)
+            self._session_backend.delete_agent_data(name)
+        except Exception as e:
+            logger.exception("Failed to delete agent")
+            self.errorOccurred.emit(f"Failed to delete agent: {e}")
+            return False
+
+        if name == self._selected_agent:
+            self._selected_agent = ""
+            self._selected_session_id = -1
+            self.selectedAgentChanged.emit()
+            self.selectedSessionChanged.emit()
+            self._message_list_model.reset_to([])
+            self._session_list_model.reset_to([])
+
+        self._agent_list_model.reset_to(self._agent_backend.list_agents())
+        logger.info("Agent deleted: %s", name)
+        return True
 
     # ---------- sessions ----------
     @pyqtSlot()
@@ -153,7 +265,7 @@ class AppController(QObject):
         username = self._username
         user_saved = False
         failed = False
-        self._set_status(session_id, "Thinking…")
+        self._set_status(session_id, "Thinking\u2026")
 
         try:
             message_rows = self._session_backend.get_messages(session_id)
@@ -167,7 +279,7 @@ class AppController(QObject):
             ):
                 match event:
                     case GeneratingResponse():
-                        self._set_status(session_id, "Thinking…")
+                        self._set_status(session_id, "Thinking\u2026")
                     case GenerationFinished(content=c):
                         self._set_status(session_id, None)
                         if not user_saved:
@@ -180,6 +292,7 @@ class AppController(QObject):
                             )
                             self._message_list_model.confirm_pending(pending_id, saved)
                             user_saved = True
+                            self._maybe_title_session(session_id, text)
                         if c.strip():
                             reply = self._session_backend.add_message(
                                 session_id, "assistant", c, agent_name
@@ -187,9 +300,9 @@ class AppController(QObject):
                             if self._selected_session_id == session_id:
                                 self._message_list_model.append(reply)
                     case ToolCallStarted(name=n):
-                        self._set_status(session_id, f"Running {n}…")
+                        self._set_status(session_id, f"Running {n}\u2026")
                     case ToolCallFinished():
-                        self._set_status(session_id, "Thinking…")
+                        self._set_status(session_id, "Thinking\u2026")
                     case RunError(message=m):
                         failed = True
                         logger.warning("Run failed, user message not saved: %s", m)
@@ -209,8 +322,35 @@ class AppController(QObject):
         finally:
             self._set_status(session_id, None)
 
+    def _maybe_title_session(self, session_id: int, text: str) -> None:
+        if session_id in self._titled_sessions:
+            return
+        self._titled_sessions.add(session_id)
+        task = asyncio.ensure_future(self._generate_title(session_id, text))
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    async def _generate_title(self, session_id: int, text: str) -> None:
+        try:
+            current = self._session_backend.get_session(session_id)
+            if current is None or not current.title.startswith("Session "):
+                return
+            fallback = self._humanize_title(text)
+            title = await self._agent_backend.generate_title(text)
+            new_title = title or fallback
+            self._session_backend.rename_session(new_title, session_id)
+            self._session_list_model.rename(session_id, new_title)
+        except Exception:
+            logger.exception("Failed to title session: %s", session_id)
+
+    @staticmethod
+    def _humanize_title(text: str) -> str:
+        clean = " ".join(text.split())
+        if len(clean) > TITLE_PREFIX_MAX:
+            clean = clean[:TITLE_PREFIX_MAX].rstrip()
+        return clean
+
     def _schedule_extraction(self, session_id: int, agent_name: str) -> None:
-        """Extract memories in the background every EXTRACT_EVERY new messages."""
         rows = self._session_backend.get_messages(session_id)
         last = self._extracted_upto.get(session_id, 0)
         fresh = [r for r in rows if r.id > last]
@@ -222,7 +362,7 @@ class AppController(QObject):
         task = asyncio.ensure_future(
             self._agent_backend.extract_memories(agent_name, fresh)
         )
-        self._bg_tasks.add(task)  # keep a reference or it can be garbage-collected
+        self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 
     def _fail(

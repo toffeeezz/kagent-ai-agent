@@ -1,5 +1,3 @@
-// [ame-chan] fixed: section headers + New Session row now use font.families (plural)
-// [ame-chan] refactored: single-card left panel, outlineVariant dividers between sections, consistent left-aligned headers, rest-state chip on New Session
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -11,6 +9,11 @@ CustomRect {
   id: root
   Layout.fillHeight: true
   Layout.minimumWidth: 225
+
+  NewAgentDialog {
+    id: newAgentDialog
+    modelList: ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v3.1", "openai/gpt-4.1", "openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash", "meta-llama/llama-3.3-70b-instruct"]
+  }
 
   ColumnLayout {
     id: column
@@ -28,6 +31,11 @@ CustomRect {
       Layout.topMargin: Theme.spaceLg
       Layout.bottomMargin: Theme.spaceSm
       horizontalAlignment: Text.AlignLeft
+    }
+
+    NewAgentCard {
+      id: newAgentCard
+      onClicked: newAgentDialog.open()
     }
 
     Item {
@@ -86,9 +94,6 @@ CustomRect {
       CustomRect {
         id: newSessionBtn
 
-        // [ame-chan] fixed: "+" was a bare fontLg Text that overflowed the 16px content box and
-        // rode high vs. the label. Now it lives in a fixed 12px slot (same as the SessionRow
-        // bullet) with both children VCenter-aligned, so icon and label share a center line.
         readonly property int iconSlot: 12
 
         Layout.fillWidth: true
