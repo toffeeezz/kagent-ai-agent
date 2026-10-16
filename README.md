@@ -31,6 +31,15 @@
 - [What is it?](#what-is-it)
 - [Project Objectives](#project-objectives)
 - [Features](#features)
+  - [Agents](#agents)
+  - [Sessions](#sessions)
+  - [Messages](#messages)
+  - [Toolkits](#toolkits)
+  - [Memory](#memory)
+  - [Auto-titling](#auto-titling)
+  - [Image attachments](#image-attachments)
+  - [Code syntax highlighting](#code-syntax-highlighting)
+  - [Logging](#logging)
   - [Create your own toolkit](#create-your-own-toolkit)
   - [Prebuilt agents](#prebuilt-agents)
   - [Create your own agent](#create-your-own-agent)
@@ -52,7 +61,7 @@
 
 **KAgent** is a desktop application for building and running AI agents that do real work, not just chat. Each agent has its own personality, voice, and behavior, and can act directly on your local environment through a pluggable toolkit system: reading and writing files, managing a project, and running git operations. You can use the agents that ship with the app or create your own.
 
-Agents are defined by Markdown files with YAML frontmatter that specify the name, model, temperature, reasoning effort, max loop count, and a full persona prompt (including jailbreak resistance and verification keywords). Anyone can add a new agent, or extend what an agent can do with a new toolkit, without touching the core code.
+Agents are defined by Markdown files with YAML frontmatter that specify the name, model, temperature, reasoning effort, max loop count, and a full persona prompt (including jailbreak resistance and verification keywords). Anyone can add a new agent, or extend what an agent can do with a new toolkit, without touching the core code. You can also **create and delete agents directly from the UI** through a dedicated dialog.
 
 The app uses **OpenRouter** as its LLM provider and supports:
 
@@ -73,7 +82,7 @@ KAgent provides a desktop-based, open, and extensible alternative. Instead of on
 KAgent is primarily designed for personal use, and it is built for a few kinds of people:
 
 - **People who want more than a stiff assistant.** If you want an agent with a real personality that remembers you and adapts over time, KAgent gives you that out of the box with four prebuilt agents (Amadeus, Ame, Aqua, and Silver Wolf).
-- **People who want to create their own agents.** Write a Markdown file with YAML frontmatter and you can define an agent's name, model, temperature, reasoning effort, and a full persona prompt. You decide who the agent is and how it talks, with no changes to the core code. See [Creating Agents](docs/CREATING_AGENTS.md).
+- **People who want to create their own agents.** Write a Markdown file with YAML frontmatter and you can define an agent's name, model, temperature, reasoning effort, and a full persona prompt. You decide who the agent is and how it talks, with no changes to the core code. You can also create agents on the fly through the **New Agent** dialog in the UI. See [Creating Agents](docs/CREATING_AGENTS.md).
 - **People who want to customize what their agents can do.** Each agent can be given its own set of tools by building toolkits (a `tools.py` plus a `SKILL.md`). You can write your own toolkits to give an agent exactly the abilities it needs, and agents can discover and enable toolkits themselves. See [Creating Toolkits](docs/CREATING_TOOLKITS.md).
 - **Students and developers working on software projects.** KAgent can act as a coding assistant that lives inside your project and can:
   - Read, write, and manage files in the local file system (safety guardrails still need further development)
@@ -97,15 +106,49 @@ KAgent is primarily designed for personal use, and it is built for a few kinds o
 
 ## Features
 
-| Feature | Description |
-| --- | --- |
-| **Multiple AI agents** | Each agent has its own system prompt, model, temperature, reasoning effort, and max loop count. Agents are defined as Markdown files with YAML frontmatter. Ships with four: Amadeus, Ame, Aqua, and Silver Wolf. |
-| **Session-based chat** | Create, rename, and delete sessions. Each session stores its full message history scoped to one agent, and sessions are listed per agent. |
-| **Toolkit / function calling** | Agents can call filesystem tools (read, write, list, move, copy, delete, append, get info) and git tools (status, add, commit, diff, restore) through a dynamic toolkit registry. Agents use `register_kit` and `list_kits` to discover and enable toolkits themselves. |
-| **Image attachments** | Attach images with the file picker or drag and drop. Images are base64-encoded and sent to vision-capable models, with thumbnails shown inline in the chat. The 4 most recent images in the history window are re-sent, and older ones become text notes. |
-| **Persistent memory** | Background memory extraction runs every 6 messages per agent. Memories are embedded with sqlite-vec and stored in `agent.db` alongside the chat history. They are retrieved via cosine similarity with a ranked formula (relevance × 0.6 + importance × 0.25 + recall × 0.15). Memories decay over time and are reinforced on access. |
-| **Code syntax highlighting** | Code blocks in chat messages are highlighted with Pygments (Monokai theme) through a custom `CodeHighlighter` that operates on Qt's `QTextDocument`. |
-| **Logging** | Rich console output with colored keywords, plus a rotating file handler (10 MB, 5 backups, DEBUG level). |
+### Agents
+
+- **Create** — via the **New Agent** dialog in the UI (set name, type, model, avatar, parameters, and persona; the dialog validates all fields, prevents duplicate names, and imports the avatar automatically) or by placing a Markdown file with YAML frontmatter in `src/modules/agents/definitions/`.
+- **Read** — all agents appear in the left panel with their avatars. The agent scanner reads `definitions/` at startup and builds each agent with its persona, model settings, and tool registry.
+- **Delete** — right-click any agent and choose **Delete**. A confirmation dialog warns that the agent, its sessions, messages, and memories will all be removed. The definition file, avatar, and database records are cleaned up together.
+
+### Sessions
+
+- **Create** — click **New Session** to start a new conversation scoped to the selected agent.
+- **Read** — sessions are listed per agent in the left panel. Click one to load its full message history.
+- **Update** — right-click a session and choose **Rename** to change its display title.
+- **Delete** — right-click a session and choose **Delete**. The session and its messages and attachments are removed (cascade delete). Memories formed from that session's messages remain.
+
+### Messages
+
+- **Create** — type in the input field and press **Enter** (or **Shift+Enter** for a newline) to send. Attach images via the file picker or drag-and-drop.
+- **Read** — messages are displayed in chat bubbles with code syntax highlighting (Pygments Monokai theme). The 4 most recent images in the history window are re-sent to the model as base64; older ones become text notes.
+
+### Toolkits
+
+- **Create** — write a `tools.py` with your functions and a `SKILL.md` with instructions for the model, then place them in `src/modules/toolkits/kits/`. Agents discover and enable toolkits themselves using `register_kit` and `list_kits`.
+- **Read** — the toolkit registry scans `kits/` at startup and makes them available. Agents see the tool schemas and skill instructions in their system prompt.
+
+### Memory
+
+- **Create** — a background extractor runs every 6 messages per agent, summarizing new conversation turns into structured memories with importance scores. Each memory is embedded (Qwen3, 4096 dimensions) and stored in the database.
+- **Read** — before each response, the agent retrieves up to 3 relevant memories via cosine similarity search with ranked scoring (relevance × 0.6 + importance × 0.25 + recall × 0.15). Memories decay with a 14-day half-life and are reinforced on access.
+
+### Auto-titling
+
+New sessions are automatically titled from the first user message using a dedicated basic agent (`TITLE_GENERATOR`). Falls back to a human-readable prefix if generation fails.
+
+### Image attachments
+
+Attach images with the file picker or drag and drop. Images are base64-encoded and sent to vision-capable models, with thumbnails shown inline in the chat.
+
+### Code syntax highlighting
+
+Code blocks in chat messages are highlighted with Pygments (Monokai theme) through a custom `CodeHighlighter` that operates on Qt's `QTextDocument`.
+
+### Logging
+
+Rich console output with colored keywords, plus a rotating file handler (10 MB, 5 backups, DEBUG level).
 
 ### Create your own toolkit
 
@@ -127,7 +170,7 @@ All four agents currently run on DeepSeek models through OpenRouter. Their setti
 
 ### Create your own agent
 
-Want an agent of your own? Add a Markdown file with YAML frontmatter to `src/modules/agents/definitions/` and restart the app. The full walkthrough is in [Creating Agents](docs/CREATING_AGENTS.md), and you can start from the [sample agent template](docs/templates/SAMPLE_AGENT_MD.md).
+Want an agent of your own? Use the **New Agent** button in the UI to create one without touching the filesystem, or add a Markdown file with YAML frontmatter to `src/modules/agents/definitions/` and restart the app. The full walkthrough is in [Creating Agents](docs/CREATING_AGENTS.md), and you can start from the [sample agent template](docs/templates/SAMPLE_AGENT_MD.md).
 
 ---
 
@@ -145,7 +188,7 @@ Want an agent of your own? Add a Markdown file with YAML frontmatter to `src/mod
 | Library | Purpose |
 | --- | --- |
 | `pydantic` | Data models and validation (`AgentDefinition`, `LLMPayload`, `LLMResponse`, `MessageRow`, `SessionRow`, and others) |
-| `python-frontmatter` + `PyYAML` | Parsing agent definitions from Markdown files with YAML frontmatter |
+| `python-frontmatter` + `PyYAML` | Parsing and writing agent definitions from/to Markdown files with YAML frontmatter |
 | `Pygments` | Syntax highlighting for code blocks in chat (Monokai style) |
 | `send2trash` | Safe deletion, moving files to the OS trash instead of deleting permanently |
 | `PyMuPDF` + `pymupdf4llm` | Reading PDF and DOCX documents as Markdown through tool calling |
@@ -190,10 +233,11 @@ kagent/
 │       ├── agents/
 │       │   ├── models.py       # BaseAgent (ABC), BasicAgent, CompleteAgent, AgentDefinition
 │       │   ├── builder.py      # Agent factory: scans definitions/, builds agents, attaches global prompt + tool registry
+│       │   ├── creator.py      # create_agent_file() / delete_agent_file(): write Markdown with frontmatter, import avatars
 │       │   ├── errors.py       # AgentError
 │       │   ├── events.py       # AgentEvent dataclasses
 │       │   ├── GLOBAL_SYSTEM_PROMPT.md   # Shared prompt injected into every CompleteAgent
-│       │   ├── definitions/    # Agent persona files (AMADEUS.md, AME.md, AQUA.md, SILVERWOLF.md)
+│       │   ├── definitions/    # Agent persona files (AMADEUS.md, AME.md, AQUA.md, SILVERWOLF.md, TITLE_GENERATOR.md)
 │       │   └── avatars/        # Agent avatar images
 │       ├── database/
 │       │   ├── database.py     # SQLite wrapper: schema, sessions, messages, attachments, memories, embeddings, vector search
@@ -201,15 +245,15 @@ kagent/
 │       │   └── erros.py        # DatabaseError
 │       ├── gui/
 │       │   ├── app.py          # Entry point: QApplication, QQmlApplicationEngine, controller wiring
-│       │   ├── controller.py   # AppController: bridges QML and Python backends
+│       │   ├── controller.py   # AppController: bridges QML and Python backends (create/delete agent, auto-title, send)
 │       │   ├── models.py       # QAbstractListModel subclasses for QML views
 │       │   ├── highlighter.py  # CodeHighlighter (Pygments)
 │       │   ├── loader.py       # QmlReloader: hot-reloads the UI on file changes
 │       │   └── components/     # QML UI components
 │       │       ├── Main.qml    # Root window: toast notifications, loader, hot-reload wiring
 │       │       ├── App.qml     # Layout: LeftPanel + RightPanel
-│       │       ├── generic/    # Reusable widgets (AppButton, CustomImage, CustomRect)
-│       │       ├── left_panel/ # Agent list + session list
+│       │       ├── generic/    # Reusable widgets (AppButton, CustomImage, CustomRect, AppComboBox, AppTextField, FieldLabel)
+│       │       ├── left_panel/ # Agent list + session list (AgentRow, NewAgentCard, NewAgentDialog)
 │       │       ├── right_panel/# Chat area, message bubbles, input, attachments
 │       │       └── theme/      # Theme.qml singleton (colors, spacing, fonts) + qmldir
 │       ├── memory/
@@ -247,25 +291,28 @@ kagent/
 | `data/agent.db` | The application's only SQLite database. Holds sessions, messages, attachments, memories, memory-to-message links, and sqlite-vec embeddings. |
 | `agents/models.py` | All agent classes and the `AgentDefinition` metadata model. |
 | `agents/builder.py` | Scans `definitions/`, parses the Markdown files, and builds agents with the global prompt and tool registry. |
-| `agents/definitions/` | One Markdown file per agent persona, with YAML frontmatter for settings. |
+| `agents/creator.py` | `create_agent_file()` and `delete_agent_file()`: write validated Markdown files with YAML frontmatter, import avatars from arbitrary paths, and delete agent definitions and their avatars by name. Used by the UI dialog. |
+| `agents/definitions/` | One Markdown file per agent persona, with YAML frontmatter for settings. `TITLE_GENERATOR.md` is a basic agent used for auto-titling sessions. |
 | `agents/events.py` | Event types the agent yields during a run (generating, tool call started/finished, error). |
-| `database/database.py` | Creates the whole schema and exposes session, message, attachment, memory, embedding, and vector-search operations. |
+| `database/database.py` | Creates the whole schema and exposes session, message, attachment, memory, embedding, and vector-search operations. Includes `delete_agent_data()` to wipe all sessions and memories for a deleted agent. |
 | `memory/service.py` | Embeds text through the server and builds the `<memories>` block. Storage, similarity search, ranking, decay, and reinforcement are done by `database.py`. |
 | `memory/extractor.py` | Background task that runs a BasicAgent every 6 messages to extract memories from conversation history. |
 | `server/server.py` | Sends chat and embedding requests to the LLM provider and parses responses. |
 | `toolkits/registry.py` | Tracks toolkits, generates tool schemas, and executes tool calls. |
 | `toolkits/kits/` | The actual toolkits: each has a `tools.py` with the functions and a `SKILL.md` with instructions for the model. |
 | `gui/app.py` | Application entry point that wires the QML engine to the controller. |
-| `gui/controller.py` | Handles user actions from QML, manages async tasks, and tracks per-session status. |
+| `gui/controller.py` | Handles user actions from QML, manages async tasks, tracks per-session status, and provides `createAgent` / `deleteAgent` slots and auto-titling. |
 | `gui/models.py` | List models feeding agents, sessions, messages, and attachments into QML. |
 | `gui/loader.py` | Watches QML files and reloads the UI during development. |
 | `gui/components/` | All QML files making up the interface. |
+| `gui/components/generic/` | Reusable widgets: `AppButton`, `CustomImage`, `CustomRect`, `AppComboBox` (editable combo box), `AppTextField` (text input with validation), `FieldLabel` (section label). |
+| `gui/components/left_panel/` | Agent list (`AgentRow` with right-click delete), `NewAgentCard` (the "+ New Agent" button), and `NewAgentDialog` (the full creation form). |
 | `backend.py` | `Protocol` interfaces the controller depends on, plus their implementations. |
 | `utils/logger.py` | Logging configuration. |
 | `logs/app.log` | Rotating log file written by `utils/logger.py` (10 MB per file, 5 backups, DEBUG level). |
 | `docs/imgs/` | Screenshots for documentation. |
 | `docs/templates/` | Starter templates for new agents (`SAMPLE_AGENT_MD.md`), toolkit instructions (`SAMPLE_SKILL.md`), and toolkit code (`sample_tools.py`). |
-| `docs/CREATING_AGENTS.md` | Step-by-step guide to writing your own agent. |
+| `docs/CREATING_AGENTS.md` | Step-by-step guide to writing your own agent, including the in-app creation dialog and deletion flow. |
 | `docs/CREATING_TOOLKITS.md` | Step-by-step guide to writing your own toolkit. |
 
 </details>
@@ -484,13 +531,15 @@ python3 -m modules.gui.app
 
 1. **Launch the app.** You'll see a dark-themed two-panel window. The left panel shows agents (with avatars) and their sessions, and the right panel is the chat area.
 2. **Select an agent** from the left panel. Available agents: **Amadeus, Ame, Aqua, Silver Wolf**. Each has a unique personality defined in its Markdown file. You can also [create your own agent](#create-your-own-agent).
-3. **Create a new session** with the **New Session** button. Sessions are scoped per agent. Click an existing session to load its history.
+3. **Create a new session** with the **New Session** button. Sessions are scoped per agent. Click an existing session to load its history. New sessions are automatically titled from the first message you send.
 4. **Type your message** in the input field at the bottom right. Press **Enter** to send, or **Shift+Enter** for a newline.
 5. **Attach images** (optional) with the attachment button or by dragging files into the input area. Images appear as thumbnails.
 6. **Watch the agent respond.** Status text shows what is happening: "Thinking..." during LLM calls and "Running tool_name..." during tool execution.
 7. **Stop generation** at any time with the stop button, which appears while the agent is generating.
 8. **Right-click a session** in the left panel to rename or delete it.
-9. **Switch agents or sessions freely.** Each agent has its own isolated conversation history and memory.
+9. **Right-click an agent** in the left panel to delete it. A confirmation dialog warns you that the agent, its sessions, messages, and memories will all be removed.
+10. **Create a new agent** with the **New Agent** card at the top of the agent list. The dialog lets you set all parameters and write a persona prompt, then creates the definition file and imports the avatar automatically. The agent appears immediately and is ready to use.
+11. **Switch agents or sessions freely.** Each agent has its own isolated conversation history and memory.
 
 ---
 
@@ -505,6 +554,7 @@ python3 -m modules.gui.app
 | `BasicAgent` | `agents/models.py` | Stateless one-shot agent (system + user message, no history, no tools). Skips the speaker tag and ignores the username. Used for memory extraction and one-off tasks. |
 | `CompleteAgent` | `agents/models.py` | Stateful agent with message history, tool calling, memory recall (`_memory_message()`), and a multi-loop run cycle (`_run_loop` up to `_max_loops`). The main chat agent. Has `run()` (yields events) and `generate()` (drains the loop). |
 | `AgentDefinition` | `agents/models.py` | Pydantic model parsed from frontmatter: `name`, `image_path`, `type` (basic/complete), `language_model`, `max_loop`, `params`. |
+| `create_agent_file()` / `delete_agent_file()` | `agents/creator.py` | Standalone functions that write validated Markdown files with YAML frontmatter and import/delete avatars. Called by the UI controller. |
 | `AgentError` | `agents/errors.py` | Subclass of `ProgramError` that adds a `name` field. |
 | `Database` | `database/database.py` | SQLite singleton (`@final` class with a module-level `DATABASE` instance). Creates the full schema and owns all CRUD for sessions, messages, attachments, memories, memory links, and embeddings, plus KNN search and ranked recall. Foreign keys use `ON DELETE CASCADE`. |
 | `SessionRow` / `MessageRow` / `MemoryRow` | `database/models.py` | Pydantic models for database rows. `MessageRow` has `attachments: tuple[str, ...]`. `MemoryRow` carries `message_ids` and, for search results, `similarity` and `score`. |
@@ -514,7 +564,7 @@ python3 -m modules.gui.app
 | `ToolkitRegistry` | `toolkits/registry.py` | Manages three kit dicts: `_core_kits` (always active, including the registry kit with `register_kit` / `list_kits`), `_registered_kits`, and `_available_kits`. Generates OpenAI tool schemas and concatenated skill instructions. `execute_tool()` dispatches calls. |
 | `ToolKit` / `Tool` / `ToolBlueprint` / `ToolResult` | `toolkits/models.py` | Dataclasses. `ToolResult[T]` is generic with `ok`, `message`, `data`, `expose_data`, and `to_content()` (serializes to a JSON string for the LLM). |
 | `ToolExecutionError` / `ToolKitError` / `ToolKitNotFoundError` | `toolkits/errors.py` | Exception hierarchy for toolkit errors, with `kit_name` and `tool_name` fields. |
-| `AppController` | `gui/controller.py` | `QObject` bridging QML and Python. Holds backends via protocols. Emits `selectedAgentChanged`, `selectedSessionChanged`, `generatingChanged`, `errorOccurred`, and `restoreInput`. Manages async send tasks per session. |
+| `AppController` | `gui/controller.py` | `QObject` bridging QML and Python. Holds backends via protocols. Emits `selectedAgentChanged`, `selectedSessionChanged`, `generatingChanged`, `errorOccurred`, `restoreInput`, and `agentCreated`. Manages async send tasks per session. Provides `createAgent()` and `deleteAgent()` slots for the UI. |
 | `AgentListModel` | `gui/models.py` | `QAbstractListModel` exposing agent names and image paths to QML through custom roles. |
 | `SessionListModel` | `gui/models.py` | Session list with `reset_to()`, `prepend()`, `rename()`, and `remove_by_id()`. |
 | `MessageListModel` | `gui/models.py` | Message list with pending message support (temporary IDs, `confirm_pending()`, `remove_by_id()`). |
@@ -548,6 +598,7 @@ flowchart LR
 - **`Database`** is a `@final` class. All internal SQL, embedding serialization, and the ranking math (`_memory_score`, `_effective_recall`, `_similarity`) are hidden behind session, message, and memory methods.
 - **Memory service** keeps embedding computation and the `<memories>` block formatting in one place. External code calls `remember()` and `recall_block()`.
 - **`AppController`** encapsulates async task management (`_tasks` dict), per-session status tracking (`_status` dict), and all signal emissions.
+- **`create_agent_file()` / `delete_agent_file()`** encapsulate the filesystem logic for agent definitions, so the UI controller never touches files directly.
 
 ### Inheritance
 
@@ -679,6 +730,7 @@ The memory tables (`memories`, `memory_messages`, `memory_embeddings`) are docum
 | **Read** session list | `get_session_list(agent_name)` | `SELECT * FROM sessions WHERE agent_name = ? ORDER BY created_at DESC, id DESC` |
 | **Update** session | `rename_session(title, id)` | `UPDATE sessions SET title = ? WHERE id = ?` |
 | **Delete** session | `delete_session(id)` | `DELETE FROM sessions WHERE id = ?` (cascades to messages, attachments, and memory links; the memories themselves stay) |
+| **Delete** agent data | `delete_agent_data(agent_name)` | `DELETE FROM sessions WHERE agent_name = ?` (cascades to messages, attachments, and links) + `DELETE FROM memories WHERE agent_name = ?` (cascades to embeddings via trigger) |
 | **Create** message | `add_message(session_id, role, text, speaker_name, attachments)` | `INSERT INTO messages` + `INSERT INTO attachments` (`executemany`), wrapped in a transaction |
 | **Read** messages | `get_messages(session_id)` | `SELECT * FROM messages WHERE session_id = ? ORDER BY id`, plus a `SELECT` on attachments joined to messages, grouped by `message_id` |
 | **Read** single message | `get_message(message_id)` | `SELECT * FROM messages WHERE id = ?` + `SELECT path FROM attachments WHERE message_id = ?` |
@@ -750,7 +802,6 @@ Many-to-many link between memories and the messages they were formed from. One m
 | --- | --- | --- | --- |
 | `memory_id` | INTEGER | NOT NULL, FK to `memories(id)` ON DELETE CASCADE | The memory |
 | `message_id` | INTEGER | NOT NULL, FK to `messages(id)` ON DELETE CASCADE | A source message |
-
 The primary key is the pair (`memory_id`, `message_id`). Deleting a session removes its links, but the memories remain.
 
 </details>
@@ -849,6 +900,8 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 | 7 | **Image attachment** | Attach an image and send. | A thumbnail appears in the message bubble and the image is included in the API request. | Pass. |
 | 8 | **Stop generation** | Click the stop button while the agent is responding. | Generation stops and the UI returns to idle. | Pass. |
 | 9 | **File toolkit read/write** | Ask an agent to read a sample file and write a new file. | The agent reads the file and writes the output with the expected content. | Pass. See `read_write_test.jpg` and `write_output.jpg`. |
+| 10 | **Create agent in-app** | Click **New Agent**, fill in the form, and create. | The agent appears in the list with its avatar and is ready to use immediately. | Pass. |
+| 11 | **Delete agent in-app** | Right-click an agent and choose **Delete**, then confirm. | The agent, its sessions, messages, and memories are removed. | Pass. |
 
 ### Code-level verification points
 
@@ -861,6 +914,8 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 - `delete_file_or_dir` requires a two-step confirmation: without `confirm` it only reports, and with `confirm=True` it moves the target to the trash.
 - Memory extraction deduplicates at ≥ 0.92 cosine similarity, preventing memory bloat from near-identical entries.
 - `Database.recall_memories()` drops candidates below a minimum similarity of 0.35 and returns at most the requested number of ranked memories (3 in normal use).
+- `create_agent_file()` validates all parameters through Pydantic, prevents duplicate names, and rejects unsupported avatar formats before writing anything.
+- `delete_agent_file()` finds the agent by name across all definition files (not by filename), deletes the definition and its avatar, and the controller also wipes the database data.
 
 ---
 
@@ -871,7 +926,7 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 
 ### Known Issues
 
-- **Duplicate agent names collide.** Agents are stored by `name`, so if two definition files share one, the later overwrites the earlier. Both still appear in the UI list.
+- **Duplicate agent names collide.** Agents are stored by `name`, so if two definition files share one, the later overwrites the earlier. Both still appear in the UI list. The in-app creation dialog prevents duplicates, but manually placed files can still clash.
 - **Same agent, two sessions at once.** Each `CompleteAgent` keeps a single `_messages` list that is replaced at the start of every run, so running two sessions of the same agent simultaneously can mix their histories.
 - **Broken agent definitions fail silently.** Invalid YAML or frontmatter is only logged, so a broken agent just doesn't appear. `AgentDefinition` forbids extra keys, so one typo rejects the whole agent, and the warning always says "invalid parameter in params" even when the problem is elsewhere.
 - **Startup depends on files existing.** A missing `definitions/` folder or `GLOBAL_SYSTEM_PROMPT.md` raises `ProgramError`, and a missing `data/` folder makes the database connection fail at import.
@@ -895,7 +950,7 @@ This is a sqlite-vec `vec0` virtual table. Virtual tables cannot have foreign ke
 - **No retries or backoff.** A rate limit or network hiccup ends the run with an error.
 - **No history trimming.** The full session history is sent on every request, so long sessions grow in cost and can exceed the model's context window.
 - **Tool calls are not persisted.** Only user and assistant text is saved, so after a restart or session switch the agent no longer sees earlier tool calls, results, or reasoning.
-- **No agent hot-reload.** Agents are built once at startup, so editing a persona or its settings needs a restart. Only the QML UI hot-reloads.
+- **No agent hot-reload.** Agents are built once at startup, so editing a persona or its settings needs a restart. Only the QML UI hot-reloads. (In-app creation and deletion take effect immediately because they call the backend directly.)
 - **No remote git operations.** The git toolkit supports only status, add, commit, diff, and restore.
 - **No authentication, single-user only.** Anyone who runs the app gets full access.
 - **Hardcoded values.** The username is `toffeezzz`, the OpenRouter base URL is set in `gui/app.py`, and memory creation depends on a basic agent named `MEMORY_EXTRACTOR`. If that agent is missing, memories are recalled but never created.

@@ -2,16 +2,46 @@
 
 An agent in KAgent is a single Markdown file. The YAML frontmatter at the top holds its settings, and everything below the frontmatter is its persona prompt. There is no code to write.
 
+You can create an agent **from the UI** (no file editing required) or **manually** by writing a Markdown file.
+
 ---
 
-## Quick start
+## Method 1: In-app creation (recommended)
+
+1. Click the **New Agent** card at the top of the agent list (the `+ New Agent` button).
+2. Fill in the dialog:
+   - **Name** — a unique display name for the agent.
+   - **Type** — `complete` for a chat agent with history, tools, and memory. `basic` for a stateless helper.
+   - **Language model** — an OpenRouter model ID. The dropdown has common suggestions, or you can type any valid ID.
+   - **Avatar** (optional, complete only) — browse for an image file. Supported formats: PNG, JPG, JPEG, WebP, GIF.
+   - **Temperature, Top P, Frequency penalty, Presence penalty** — leave blank to use the model's default.
+   - **Reasoning effort** — `low`, `medium`, `high`, or leave as `(none)`.
+   - **Max tool loops** (complete only, default 40) — how many tool-calling rounds the agent can do per message.
+   - **Max completion tokens, Seed, Stop sequences** — optional.
+   - **JSON mode** — check to force `response_format: json_object`.
+   - **Persona Prompt** — the agent's personality and behavior instructions, written in plain Markdown.
+3. Click **Create Agent**. The dialog closes and the agent appears in the left panel immediately, with its avatar and settings.
+
+The app writes the Markdown file to `src/modules/agents/definitions/` and imports the avatar to `src/modules/agents/avatars/` automatically. No restart is needed.
+
+### Deleting an agent
+
+1. Right-click the agent in the left panel.
+2. Choose **Delete** from the context menu.
+3. Confirm the deletion in the dialog that appears.
+
+The agent's definition file, avatar, sessions, messages, and memories are all removed.
+
+---
+
+## Method 2: Manual file creation
 
 1. **Copy the template.** Duplicate `docs/templates/SAMPLE_AGENT_MD.md`.
 2. **Move it** into `src/modules/agents/definitions/` and rename it (for example `LUNA.md`). Only `.md` files are loaded.
 3. **Edit the frontmatter:** set a unique `name`, pick `type` and `language_model`, and adjust the params.
 4. **Write the persona** below the closing `---`.
 5. **(Optional) Add an avatar** image to `src/modules/agents/avatars/` and set `image_path` to its filename.
-6. **Restart KAgent.** Agents are built once at startup, so edits are not picked up while the app is running.
+6. **Restart KAgent.** Agents are built once at startup, so manually placed files are only picked up after a restart.
 
 The new agent appears in the left panel. If it doesn't, check the log (see [Troubleshooting](#troubleshooting)).
 
@@ -155,10 +185,9 @@ Note that the basic agent has no `image_path` and no `max_loop`.
 | The agent doesn't appear, and it is `basic` | That is expected. Basic agents are hidden from the chat list. |
 | Two agents show up but behave the same | They share a `name`. The later file overwrites the earlier one, but both still appear in the list. Give each agent a unique name. |
 | A `basic` agent is rejected | It contains `image_path` or `max_loop`. Remove the keys entirely. |
-| Changes have no effect | Restart the app. Only the QML interface hot-reloads. |
+| Changes have no effect | Restart the app. Only the QML interface hot-reloads. (Agents created through the UI take effect immediately.) |
 | Replies are cut off or loop forever | Raise or lower `max_loop`, or set `max_completion_tokens`. Note that `max_loop: 0` falls back to 40 and negative values aren't rejected. |
 | The model errors on every request | The `language_model` ID is not a valid OpenRouter model, or the model doesn't support reasoning (a reasoning request is always sent). |
-
 The log file is `logs/app.log`.
 
 ---
