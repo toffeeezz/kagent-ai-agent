@@ -1,3 +1,6 @@
 CustomRect 1.0 CustomRect.qml
 CustomImage 1.0 CustomImage.qml
 AppButton 1.0 AppButton.qml
+FieldLabel 1.0 FieldLabel.qml
+AppTextField 1.0 AppTextField.qml
+AppComboBox 1.0 AppComboBox.qml
