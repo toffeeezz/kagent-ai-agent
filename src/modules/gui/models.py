@@ -73,6 +73,24 @@ class AgentListModel(QAbstractListModel):
             self._agents.append({"agentName": agent.name, "imagePath": str(image)})
             self.endInsertRows()
 
+    def reset_to(self, agent_definitions: list[AgentDefinition]) -> None:
+        entries: list[dict[str, str]] = []
+        for agent in agent_definitions:
+            if agent.type == "basic":
+                continue
+            image = (
+                AGENT_AVATAR_DIR / agent.image_path
+                if agent.image_path
+                else AGENT_AVATAR_DIR / "placeholder.png"
+            )
+            if not image.exists():
+                logger.warning("Agent image not found: %s", image)
+                image = AGENT_AVATAR_DIR / "placeholder.png"
+            entries.append({"agentName": agent.name, "imagePath": str(image)})
+        self.beginResetModel()
+        self._agents = entries
+        self.endResetModel()
+
 
 class SessionListModel(QAbstractListModel):
     TitleRole: int = Qt.ItemDataRole.UserRole + 1
@@ -227,7 +245,6 @@ class MessageListModel(QAbstractListModel):
         text: str,
         attachments: Sequence[AttachmentItem] = (),
     ) -> int:
-        """Show a user message before it's saved. Returns its temporary id."""
         self._last_pending_id -= 1
         pending_id = self._last_pending_id
         self.append(
@@ -246,8 +263,6 @@ class MessageListModel(QAbstractListModel):
         return pending_id
 
     def confirm_pending(self, pending_id: int, saved: MessageRow) -> None:
-        """Replace a pending row with the saved one. No-op if it's gone
-        (e.g. the model was reset by a session switch)."""
         for i, m in enumerate(self._messages):
             if m.id == pending_id:
                 self._messages[i] = saved
@@ -328,7 +343,7 @@ class AttachmentListModel(QAbstractListModel):
         for u in urls:
             url = u if isinstance(u, QUrl) else QUrl(str(u))
             path = url.toLocalFile()
-            if path:  # ignore non-local URLs
+            if path:
                 self.add_path(path)
 
     @pyqtSlot(int)
@@ -342,7 +357,7 @@ class AttachmentListModel(QAbstractListModel):
 
     # ---------- called from Python ----------
     def add_path(self, path: str) -> None:
-        if any(i.path == path for i in self._items):  # ignore duplicates
+        if any(i.path == path for i in self._items):
             return
         row = len(self._items)
         self.beginInsertRows(QModelIndex(), row, row)
@@ -351,14 +366,11 @@ class AttachmentListModel(QAbstractListModel):
         self.countChanged.emit()
 
     def take(self) -> list[AttachmentItem]:
-        """Snapshot the current attachments and clear the list."""
         items = list(self._items)
         self.clear()
         return items
 
     def restore(self, items: Sequence[AttachmentItem]) -> None:
-        """Put attachments back (after a failed send), keeping anything the
-        user attached in the meantime."""
         restored = list(items)
         known = {i.path for i in restored}
         merged = restored + [i for i in self._items if i.path not in known]

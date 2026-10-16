@@ -8,6 +8,7 @@ from openai.types.chat import (
 )
 
 from modules.agents.builder import scan_agent_dir
+from modules.agents.creator import create_agent_file, delete_agent_file
 from modules.agents.errors import AgentError
 from modules.agents.events import AgentEvent
 from modules.agents.models import (
@@ -24,13 +25,28 @@ from modules.server.server import Server
 logger = logging.getLogger(__name__)
 
 EXTRACTOR_NAME = "MEMORY_EXTRACTOR"
+TITLE_GENERATOR_NAME = "TITLE_GENERATOR"
+
+
+def _clean_title(raw: str, max_chars: int = 80) -> str:
+    text = raw.strip().strip("\"'`*_#").strip()
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip()
+        if text.endswith((",", ".", ":", ";", "-")):
+            text = text[:-1]
+    return text
 
 
 class SessionsBackend(Protocol):
     def list_sessions(self, agent_name: str) -> list[SessionRow]: ...
     def create_session(self, title: str, agent_name: str) -> SessionRow: ...
+    def get_session(self, session_id: int) -> SessionRow | None: ...
     def rename_session(self, title: str, session_id: int) -> None: ...
     def delete_session(self, session_id: int) -> None: ...
+    def delete_agent_data(self, agent_name: str) -> None: ...
     def get_messages(self, session_id: int) -> list[MessageRow]: ...
     def add_message(
         self,
@@ -44,6 +60,9 @@ class SessionsBackend(Protocol):
 
 class AgentsBackend(Protocol):
     def list_agents(self) -> list[AgentDefinition]: ...
+    def create_agent(self, **kwargs: object) -> AgentDefinition: ...
+    def delete_agent(self, name: str) -> None: ...
+    async def generate_title(self, text: str) -> str | None: ...
     def run_complete_agent(
         self,
         agent_name: str,
@@ -65,11 +84,14 @@ class MockAgentsBackend:
     _agent_definitions: list[AgentDefinition]
 
     def __init__(self, server: Server) -> None:
+        self._server = server
+        self._reload_agents()
+
+    def _reload_agents(self) -> None:
         basic, complete, definitions = scan_agent_dir()
         self._complete_agents = complete
         self._basic_agents = basic
         self._agent_definitions = definitions
-        self._server = server
         if EXTRACTOR_NAME not in basic:
             logger.warning(
                 "Memory extractor '%s' not found: memories will be recalled but never created",
@@ -77,8 +99,28 @@ class MockAgentsBackend:
             )
 
     def list_agents(self) -> list[AgentDefinition]:
-        # Basic agents are exlcuded sinec they aren't used for chatting
         return [d for d in self._agent_definitions if d.type == "complete"]
+
+    def create_agent(self, **kwargs: object) -> AgentDefinition:
+        definition = create_agent_file(**kwargs)
+        self._reload_agents()
+        return definition
+
+    def delete_agent(self, name: str) -> None:
+        delete_agent_file(name)
+        self._reload_agents()
+
+    async def generate_title(self, text: str) -> str | None:
+        generator = self._basic_agents.get(TITLE_GENERATOR_NAME)
+        if generator is None:
+            return None
+        try:
+            response = await generator.generate(self._server, "title_generator", text)
+            title = _clean_title(response.content or "")
+            return title or None
+        except Exception:
+            logger.exception("Title generation failed")
+            return None
 
     async def run_complete_agent(
         self,
@@ -104,7 +146,7 @@ class MockAgentsBackend:
     ) -> None:
         extractor = self._basic_agents.get(EXTRACTOR_NAME)
         if extractor is None:
-            return  # already warned at startup
+            return
         await extract_and_store(self._server, extractor, agent_name, rows)
 
 
@@ -112,8 +154,6 @@ class MockSessionBackend:
     _database: Database
 
     def __init__(self) -> None:
-        # Share the module-level connection with the memory code instead of
-        # opening a second one to the same file.
         self._database = DATABASE
 
     def list_sessions(self, agent_name: str) -> list[SessionRow]:
@@ -122,8 +162,14 @@ class MockSessionBackend:
     def create_session(self, title: str, agent_name: str) -> SessionRow:
         return self._database.create_session(title, agent_name)
 
+    def get_session(self, session_id: int) -> SessionRow | None:
+        return self._database.get_session(session_id)
+
     def delete_session(self, session_id: int) -> None:
         self._database.delete_session(session_id)
+
+    def delete_agent_data(self, agent_name: str) -> None:
+        self._database.delete_agent_data(agent_name)
 
     def get_messages(self, session_id: int) -> list[MessageRow]:
         return self._database.get_messages(session_id)

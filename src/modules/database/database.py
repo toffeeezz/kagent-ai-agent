@@ -213,6 +213,15 @@ class Database:
         if cur.rowcount == 0:
             raise DatabaseError(f"No session found with id {session_id}")
 
+    def delete_agent_data(self, agent_name: str) -> None:
+        with self.conn:
+            _ = self.conn.execute(
+                "DELETE FROM sessions WHERE agent_name = ?", (agent_name,)
+            )
+            _ = self.conn.execute(
+                "DELETE FROM memories WHERE agent_name = ?", (agent_name,)
+            )
+
     # ---------- messages ----------
     def add_message(
         self,
